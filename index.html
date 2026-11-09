@@ -1,0 +1,975 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPT, peça por peça — playground interativo</title>
+<meta name="description" content="Playground interativo e didático da arquitetura GPT (decoder-only): tokenização BPE, atenção causal, blocos Pre-LN, amostragem, KV cache e escala.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<style>
+:root{
+  --navy:#12396b; --navy-d:#0a2850; --navy-2:#2a5288;
+  --accent:#1288cf; --accent-l:#dcEEFa;
+  --steel:#8aa2bf; --steel-l:#c8d5e4; --mist:#eef3f8; --mist-2:#f6f9fc;
+  --ink:#1d2a3a; --muted:#5b6b7e; --amber:#d9822b; --ok:#2e8b57; --bad:#c0392b;
+  --r:10px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:Verdana,Tahoma,Geneva,sans-serif;color:var(--ink);background:#fff;font-size:14.5px;line-height:1.65}
+a{color:var(--accent)}
+h1,h2,h3{color:var(--navy);line-height:1.25}
+h3{font-size:15px;margin:0 0 10px}
+p{margin:0 0 12px}
+ul,ol{margin:0 0 12px;padding-left:22px}
+li{margin-bottom:4px}
+small,.small{font-size:12.5px}
+.muted{color:var(--muted)}
+code,.mono{font-family:Consolas,Menlo,monospace}
+.hero{position:relative;overflow:hidden;background:#fff;border-bottom:1px solid var(--steel-l);min-height:210px}
+.hero svg.swoosh{position:absolute;inset:0;width:100%;height:100%}
+.hero-in{position:relative;max-width:1380px;margin:0 auto;padding:16px 28px 26px;text-align:right}
+.series{display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;margin-bottom:14px;font-size:12px}
+.series span{color:var(--muted);align-self:center}
+.series a{border:1px solid var(--steel-l);border-radius:999px;padding:3px 11px;color:var(--navy);text-decoration:none;background:rgba(255,255,255,.8)}
+.series a:hover{border-color:var(--navy)}
+.series a.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.hero h1{margin:0;font-size:clamp(26px,4vw,40px);font-weight:700;letter-spacing:-.3px}
+.hero .sub{margin:10px 0 0;color:var(--navy);font-size:clamp(14px,1.8vw,19px)}
+.hero .author{margin:14px 0 0;color:var(--navy);font-size:16px}
+.controls{background:linear-gradient(180deg,var(--mist-2),var(--mist));border-bottom:1px solid var(--steel-l)}
+.ctl-in{max-width:1380px;margin:0 auto;padding:14px 28px;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:end}
+.fld span{display:block;font-size:12px;color:var(--navy);font-weight:700;margin-bottom:4px}
+.fld small{font-weight:400;color:var(--muted)}
+.fld input,.infld input{width:100%;padding:9px 12px;border:1px solid var(--steel-l);border-radius:8px;font:inherit;font-size:15px;color:var(--ink);background:#fff}
+.fld input:focus,.infld input:focus{outline:2px solid var(--accent);border-color:transparent}
+.infld{display:block;margin-bottom:10px}
+.infld span{display:block;font-size:12px;color:var(--navy);font-weight:700;margin-bottom:3px}
+.ctl-btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{font:inherit;font-size:13px;background:var(--navy);color:#fff;border:1px solid var(--navy);border-radius:8px;padding:8px 14px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--navy-2)}
+.btn.ghost{background:#fff;color:var(--navy);border-color:var(--steel-l)}
+.btn.ghost:hover{border-color:var(--navy)}
+.btn.acc{background:var(--accent);border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.stepper{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(6px);border-bottom:1px solid var(--steel-l)}
+.stepper-in{max-width:1380px;margin:0 auto;padding:8px 20px;display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin}
+.chip{flex:0 0 auto;font:inherit;font-size:12px;border:1px solid var(--steel-l);background:#fff;color:var(--navy);border-radius:999px;padding:5px 11px;cursor:pointer;display:flex;gap:6px;align-items:center}
+.chip .n{display:inline-grid;place-items:center;width:19px;height:19px;border-radius:50%;background:var(--mist);font-size:10.5px;font-weight:700}
+.chip:hover{border-color:var(--navy)}
+.chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.chip.on .n{background:var(--accent);color:#fff}
+.chip.done .n{background:var(--accent-l)}
+.chip-sep{flex:0 0 auto;align-self:center;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--steel);padding:0 2px 0 8px}
+.layout{max-width:1380px;margin:0 auto;padding:22px 20px 40px;display:grid;grid-template-columns:350px minmax(0,1fr);gap:28px}
+aside.diagram{position:sticky;top:62px;align-self:start}
+.dg-card{border:1px solid var(--steel-l);border-radius:var(--r);background:linear-gradient(180deg,#fff,var(--mist-2));padding:10px 6px 8px}
+.dg-title{font-size:12px;font-weight:700;color:var(--navy);text-align:center}
+.dg-hint{font-size:11px;color:var(--muted);text-align:center}
+#diagram svg{width:100%;height:auto;display:block}
+.blk rect{stroke:var(--navy);stroke-width:1.2;cursor:pointer;transition:fill .2s}
+.blk text{font-size:9.5px;fill:var(--navy);text-anchor:middle;pointer-events:none;font-family:Verdana,sans-serif}
+.blk.att rect{fill:#dbe6f2}.blk.ff rect{fill:#e8eef6}.blk.norm rect{fill:#f4f7fb}.blk.emb rect{fill:#e3edf7}.blk.out rect{fill:#e1eef9}.blk.io rect{fill:#fff;stroke-dasharray:3 2}.blk.head rect{fill:#fbf3ea;stroke:#b0661a}
+.blk:hover rect{stroke:var(--accent);stroke-width:2}
+.blk.act rect{fill:var(--accent);stroke:var(--navy-d);stroke-width:2}
+.blk.act text{fill:#fff;font-weight:700}
+.frame{fill:#f3f6fa;stroke:var(--steel);stroke-width:1.2}
+.frame.act{stroke:var(--accent);stroke-width:3;fill:#e9f4fc}
+.ar{fill:none;stroke:var(--navy);stroke-width:1.2}
+.ar.res{stroke:var(--steel);stroke-dasharray:3 2}
+.ar.loop{stroke:#b0661a;stroke-dasharray:5 3;stroke-width:1.4}
+.ar.loop.act{stroke:var(--accent);stroke-width:3}
+.sum-g circle{fill:#fff;stroke:var(--navy);stroke-width:1.2}
+.sum-g .pl{stroke:var(--navy);stroke-width:1.4}
+.dg-txt{font-size:8.5px;fill:var(--muted);font-family:Verdana,sans-serif}
+.dg-lbl{font-size:9px;fill:var(--navy);font-weight:700;letter-spacing:1px;font-family:Verdana,sans-serif}
+.step-head{margin-bottom:14px}
+.step-kicker{font-size:11.5px;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);font-weight:700}
+.step-head h2{margin:2px 0 8px;font-size:clamp(22px,2.6vw,30px)}
+.key{display:inline-block;background:var(--mist);border-left:4px solid var(--accent);padding:8px 14px;border-radius:0 8px 8px 0;color:var(--navy);font-size:14px}
+.lead{font-size:15.5px}
+.card{border:1px solid var(--steel-l);border-radius:var(--r);padding:16px 18px;margin:0 0 16px;background:#fff}
+.card.soft{background:var(--mist-2)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.grid2>.card,.grid3>.card{margin:0}
+.note{border-radius:8px;padding:11px 15px;margin:0 0 16px;border:1px solid;font-size:13.8px}
+.note-t{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.note p:last-child,.note ul:last-child{margin-bottom:0}
+.note.intu{background:#f1f7fd;border-color:#bcd9f0}.note.intu .note-t{color:var(--accent)}
+.note.paper{background:#f5f6fa;border-color:var(--steel-l)}.note.paper .note-t{color:var(--navy)}
+.note.warn{background:#fdf6ee;border-color:#f0d3b0}.note.warn .note-t{color:#b0661a}
+.note.try{background:#f0f8f3;border-color:#bfe0cb}.note.try .note-t{color:var(--ok)}
+.formula{position:relative;overflow-x:auto;overflow-y:hidden;background:var(--mist-2);border:1px solid var(--mist);border-radius:8px;padding:2px 12px;margin:0 0 16px}
+.shape{display:inline-block;font-family:Consolas,Menlo,monospace;font-size:11.5px;background:var(--navy);color:#fff;border-radius:5px;padding:1px 7px;margin-left:4px;font-weight:400;letter-spacing:0;text-transform:none}
+.shape.paper{background:var(--mist);color:var(--navy);border:1px solid var(--steel-l)}
+table.tbl{border-collapse:collapse;width:100%;font-size:13px;margin-bottom:6px}
+.tbl th,.tbl td{padding:6px 9px;border-bottom:1px solid var(--mist);text-align:left;vertical-align:top}
+.tbl th{color:var(--navy);background:var(--mist-2);font-size:12px}
+.tbl td.num,.tbl th.num{text-align:right;font-family:Consolas,Menlo,monospace}
+.tbl td.c,.tbl th.c{text-align:center}
+.tbl tr.hl td{background:#eaf4fc}
+.tbl tr.dim td{color:#a3adb9}
+.tbl-wrap{overflow-x:auto;max-width:100%}
+.scrollbox{max-height:280px;overflow-y:auto;border:1px solid var(--mist);border-radius:8px}
+.toks{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.tok{display:inline-flex;flex-direction:column;align-items:center;border:1px solid var(--steel-l);border-radius:8px;padding:4px 10px;background:#fff;font-size:14px;min-width:34px;white-space:pre}
+.tok .id{font-size:10.5px;color:var(--muted);font-family:Consolas,monospace}
+.tok.sp{background:var(--mist);color:var(--navy)}
+.tok.new{background:#fbe9d6;border-color:var(--amber)}
+.tok.clk{cursor:pointer}.tok.clk:hover{border-color:var(--accent)}
+.tok.on{border-color:var(--accent);background:var(--accent);color:#fff}.tok.on .id{color:#e6f3fc}
+.hm-wrap{margin:0 0 12px;min-width:0;max-width:100%}
+.hm-title{font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:4px}
+.hm-scroll{overflow-x:auto;padding-bottom:2px}
+.hm{display:inline-grid;gap:2px;font-family:Consolas,Menlo,monospace;font-size:10.5px}
+.hm .hc{font-size:10px;color:var(--muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;align-self:end}
+.hm .hr{font-size:11px;color:var(--navy);padding-right:6px;text-align:right;white-space:nowrap;align-self:center;max-width:96px;overflow:hidden;text-overflow:ellipsis;font-family:Verdana,sans-serif}
+.hm .hr.clk{cursor:pointer;text-decoration:underline dotted}
+.hm .hr.hl{font-weight:700;color:var(--accent)}
+.hm .c{display:grid;place-items:center;border-radius:3px;cursor:crosshair}
+.hm .c.hl{box-shadow:inset 0 0 0 2px var(--accent)}
+.hm .c.ninf{background:repeating-linear-gradient(45deg,#e7ebf0,#e7ebf0 3px,#f6f8fa 3px,#f6f8fa 6px);color:#8a96a5}
+.hm-cap{font-size:11.5px;color:var(--muted);margin-top:3px}
+.flowrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
+.flowrow>.hm-wrap,.grid2>div,.card{max-width:100%;min-width:0}
+.flowrow .op{font-size:22px;color:var(--steel);font-weight:700;padding:0 2px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}
+.sw{display:inline-block;width:28px;height:12px;border-radius:3px;vertical-align:middle;margin-right:4px}
+.ctrl-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 14px;padding:8px 12px;background:var(--mist-2);border:1px solid var(--mist);border-radius:8px}
+.ctrl-lbl{font-size:12px;color:var(--navy);font-weight:700}
+.seg{display:inline-flex;border:1px solid var(--steel-l);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg button{font:inherit;font-size:12.5px;border:0;background:#fff;color:var(--navy);padding:4px 11px;cursor:pointer;border-right:1px solid var(--steel-l)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--navy);color:#fff}
+.rng{display:flex;align-items:center;gap:10px;font-size:13px;flex-wrap:wrap}
+.rng input[type=range]{accent-color:var(--accent);width:190px;max-width:100%}
+.rng b{font-family:Consolas,monospace;color:var(--navy);min-width:48px}
+.arcs{max-width:100%;height:auto;font-family:Verdana,sans-serif}
+.arcs text{font-size:12px;fill:var(--navy)}
+.arcs text.q{cursor:pointer}
+.arcs text.q.sel{font-weight:700;fill:var(--accent)}
+.arcs text.pct{font-size:10px;fill:var(--muted)}
+.bars{display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+.bar-row{display:grid;grid-template-columns:96px 1fr 58px;gap:8px;align-items:center}
+.bar-row .bl{text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:pre;color:var(--navy)}
+.bar-row .bt{background:var(--mist);border-radius:3px;height:14px;overflow:hidden;position:relative}
+.bar-row .bf{display:block;height:100%;background:var(--steel)}
+.bar-row .bg{position:absolute;left:0;top:0;height:100%;border-right:2px solid #8aa2bf;background:rgba(138,162,191,.18)}
+.bar-row .bv{font-family:Consolas,monospace;font-size:11.5px;color:var(--muted)}
+.bar-row.hl .bf{background:var(--navy)}
+.bar-row.hl .bl{font-weight:700}
+.bar-row.cut .bl{text-decoration:line-through;color:#a3adb9}
+.chart{width:100%;height:auto;display:block;font-family:Verdana,sans-serif}
+.chart .grid{stroke:#e3e9f0}
+.chart .tick{font-size:10px;fill:var(--muted)}
+.chart .axl{font-size:11px;fill:var(--navy)}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 12px}
+.flow .fs{border:1px solid var(--steel-l);border-radius:8px;padding:6px 10px;background:var(--mist-2);color:var(--navy);font-size:12.5px;cursor:pointer}
+.flow .fs:hover{border-color:var(--accent);background:#fff}
+.flow .fa{color:var(--steel)}
+.eq{font-family:Consolas,Menlo,monospace;font-size:12.5px;background:var(--mist-2);border-radius:6px;padding:8px 10px;overflow-x:auto;white-space:nowrap}
+.prompt{font-family:Consolas,Menlo,monospace;font-size:13px;background:#0f2747;color:#e6eef8;border-radius:8px;padding:12px 14px;white-space:pre-wrap;line-height:1.6}
+.prompt .ans{color:#ffc98a}
+.gen-text{font-size:17px;padding:12px 14px;background:var(--mist-2);border-radius:8px;margin-bottom:10px;white-space:pre-wrap}
+.gen-text .new{background:#fbe9d6;border-radius:3px}
+.stat{display:inline-block;background:var(--mist);border-radius:6px;padding:4px 10px;margin:0 6px 6px 0;font-size:12.5px}
+.stat b{color:var(--navy)}
+.jr{display:grid;grid-template-columns:minmax(150px,1.3fr) auto 70px 70px;gap:4px 12px;align-items:center;font-size:12.5px}
+.jr .h{font-weight:700;color:var(--navy);font-size:11.5px}
+.jr .lab{color:var(--navy)}
+.jr .lab.delta{font-style:italic;color:var(--muted)}
+.jr .num{font-family:Consolas,monospace;text-align:right}
+.strip{display:flex;gap:2px}
+.strip span{width:26px;height:20px;border-radius:3px;display:block}
+.quiz-q{margin-bottom:4px}
+.quiz-q .opts{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.quiz-q .opt{font:inherit;font-size:13.5px;text-align:left;background:#fff;border:1px solid var(--steel-l);border-radius:8px;padding:8px 12px;cursor:pointer;color:var(--ink)}
+.quiz-q .opt:hover{border-color:var(--navy)}
+.quiz-q .opt.right{background:#e9f6ee;border-color:var(--ok)}
+.quiz-q .opt.wrong{background:#fbecea;border-color:var(--bad)}
+.quiz-q .fb{margin-top:8px;font-size:13px}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:22px;padding-top:16px;border-top:1px solid var(--steel-l)}
+.pager .btn{white-space:normal;max-width:42%;text-align:center}
+#pager-info{font-size:12px;color:var(--muted);text-align:center}
+footer{border-top:1px solid var(--steel-l);background:var(--mist-2);font-size:12px;color:var(--muted)}
+footer .in{max-width:1380px;margin:0 auto;padding:16px 28px}
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--navy-d);color:#fff;font-family:Consolas,Menlo,monospace;font-size:12px;padding:4px 8px;border-radius:5px;opacity:0;transition:opacity .1s;white-space:nowrap}
+.katex-display{margin:.6em 0}
+.katex .katex-mathml{width:1px;max-width:1px;overflow:hidden}
+@media (max-width:1000px){.layout{grid-template-columns:minmax(0,1fr)}aside.diagram{position:static;max-width:380px;width:100%;margin:0 auto}}
+@media (max-width:720px){
+  .ctl-in{grid-template-columns:1fr;padding:12px 16px}
+  .hero-in{padding:14px 16px 20px}
+  .layout{padding:16px 16px 30px}
+  .grid2,.grid3{grid-template-columns:minmax(0,1fr)}
+  .hero .check{display:none}
+  .jr{grid-template-columns:1fr auto}
+  .jr .num.cos,.jr .h.cos{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <svg class="swoosh" viewBox="0 0 1200 260" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="sw1" x1="0" x2="1"><stop offset="0" stop-color="#c3d1e2"/><stop offset=".7" stop-color="#dfe7f0" stop-opacity=".7"/><stop offset="1" stop-color="#eef3f8" stop-opacity="0"/></linearGradient>
+      <linearGradient id="sw2" x1="0" x2="1"><stop offset="0" stop-color="#eef3f8" stop-opacity="0"/><stop offset=".35" stop-color="#d3deea"/><stop offset="1" stop-color="#e6edf5"/></linearGradient>
+      <linearGradient id="ck1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9eff6"/><stop offset=".55" stop-color="#9fb4cc"/><stop offset="1" stop-color="#5b7aa0"/></linearGradient>
+      <linearGradient id="ck2" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#8ea6c3"/><stop offset="1" stop-color="#dfe7f0"/></linearGradient>
+    </defs>
+    <path d="M-20,0 C140,40 300,150 420,262 L360,262 C260,160 120,70 -20,40Z" fill="url(#sw1)" opacity=".85"/>
+    <path d="M0,232 C320,170 760,150 1200,178 L1200,192 C760,166 330,190 0,250Z" fill="url(#sw2)"/>
+    <g class="check" opacity=".9"><polygon points="40,118 104,118 178,196 148,224" fill="url(#ck1)"/><polygon points="148,224 178,196 262,140 232,140" fill="url(#ck2)"/></g>
+  </svg>
+  <div class="hero-in">
+    <nav class="series"><span>Série:</span><a href="https://bernardoaflalo.github.io/transformer-playground/">Transformer</a><a href="https://bernardoaflalo.github.io/bert-playground/">BERT (encoder)</a><a class="on" href="https://bernardoaflalo.github.io/gpt-playground/">GPT (decoder)</a></nav>
+    <h1>GPT, peça por peça</h1>
+    <p class="sub">Playground interativo da arquitetura <i>decoder-only</i> — GPT-1, GPT-2 e GPT-3 (OpenAI, 2018–2020)</p>
+    <p class="author">Bernardo Aflalo</p>
+  </div>
+</header>
+
+<section class="controls">
+  <div class="ctl-in">
+    <label class="fld"><span>Prompt <small>— o texto que o modelo vai continuar</small></span><input id="in-prompt" autocomplete="off" spellcheck="false"></label>
+    <div class="ctl-btns">
+      <button id="btn-seed" class="btn" title="Gera uma nova inicialização aleatória de todos os pesos">🎲 Sortear pesos</button>
+      <button id="btn-reset" class="btn ghost">Restaurar exemplo</button>
+      <span id="seed-info" class="small muted"></span>
+    </div>
+  </div>
+</section>
+
+<nav class="stepper"><div class="stepper-in" id="stepper"></div></nav>
+
+<main class="layout">
+  <aside class="diagram">
+    <div class="dg-card">
+      <div class="dg-title">Arquitetura do GPT-2 (decoder-only)</div>
+      <div id="diagram"></div>
+      <div class="dg-hint">Clique em um bloco para ir ao passo correspondente</div>
+    </div>
+  </aside>
+  <article>
+    <div id="content"></div>
+    <div class="pager">
+      <button id="prev" class="btn ghost">← Anterior</button>
+      <span id="pager-info"></span>
+      <button id="next" class="btn">Próximo →</button>
+    </div>
+  </article>
+</main>
+
+<footer><div class="in">
+  Baseado em Radford et al. (2018), <a href="https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf" target="_blank" rel="noopener"><i>Improving Language Understanding by Generative Pre-Training</i></a> (GPT-1);
+  Radford et al. (2019), <a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf" target="_blank" rel="noopener"><i>Language Models are Unsupervised Multitask Learners</i></a> (GPT-2);
+  Brown et al. (2020), <a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener"><i>Language Models are Few-Shot Learners</i></a> (GPT-3).
+  Material didático: o modelo deste playground é uma miniatura com pesos aleatórios (não treinado), mas executa exatamente as operações da arquitetura.
+</div></footer>
+
+<div id="tip" class="tip"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Configuração
+   ===================================================================== */
+const D = 8, H = 2, DK = 4, DFF = 32, NL = 2, CTX = 16;
+const G2 = { L: 12, d: 768, h: 12, dk: 64, dff: 3072, V: 50257, ctx: 1024 };
+const DEF_PROMPT = 'o gato subiu no';
+const CORPUS = `o gato subiu no telhado. o gato desceu do telhado. a gata subiu na árvore. o menino viu o gato no telhado. a menina viu a gata na árvore. o cachorro subiu no sofá. o gato dormiu no sofá. o menino e a menina brincaram no jardim. a gata dormiu no jardim. o cachorro latiu para o gato. o gato fugiu do cachorro. a menina subiu no muro. o menino desceu do muro. o gato pulou o muro. a gata pulou no sofá. o cachorro dormiu no jardim. o menino subiu na árvore. a menina desceu da árvore. o gato viu o passarinho. o passarinho voou do telhado.`;
+const EOT = '<|endoftext|>';
+const MAXM = 120;
+
+const S = {
+  step: 0, prompt: DEF_PROMPT, seed: 5, layer: 0, head: 0, selQ: null, maskOn: true,
+  nMerges: 25, bpeTry: 'o gatinho pulou', outPos: null,
+  temp: 1, topk: 0, topp: 1, sampCounts: null,
+  gen: null, genLog: [], genMode: 'greedy',
+  calcL: 12, calcD: 768, calcV: 50257, calcCtx: 1024,
+  shots: 3, useTab: 'gpt1', trackIdx: null, quiz: {}
+};
+let W = null, R = null;
+
+/* =====================================================================
+   Utilidades
+   ===================================================================== */
+const $ = (s, el = document) => el.querySelector(s);
+const tx = String.raw;
+const m = s => '\\(' + s + '\\)';
+const M = s => `<div class="formula">$$${s}$$</div>`;
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function fmt(v, d = 2) { if (v === -Infinity) return '−∞'; if (v === Infinity) return '∞'; if (Math.abs(v) < 0.5 * Math.pow(10, -d)) v = 0; return v.toFixed(d).replace('-', '−'); }
+const fmtInt = v => Math.round(v).toLocaleString('pt-BR');
+const pct = v => (v * 100).toFixed(1).replace('.', ',') + '%';
+const dl = (n, p = 'd') => Array.from({ length: n }, (_, j) => p + j);
+const SUP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻' };
+const pow10 = v => '10' + String(Math.round(v)).split('').map(c => SUP[c] || c).join('');
+function fmtBig(n) { if (n >= 1e9) return (n / 1e9).toFixed(n >= 1e10 ? 0 : 1).replace('.', ',') + ' bi'; if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace('.', ',') + ' mi'; return fmtInt(n); }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hashStr(s) { let h = 2166136261; for (const ch of s) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function makeRng(seed) { const u = mulberry32(seed >>> 0); return { u, g() { let a = 0; while (a === 0) a = u(); return Math.sqrt(-2 * Math.log(a)) * Math.cos(2 * Math.PI * u()); } }; }
+const randM = (rng, r, c, std) => Array.from({ length: r }, () => Array.from({ length: c }, () => rng.g() * std));
+const randV = (rng, n, std) => Array.from({ length: n }, () => rng.g() * std);
+function matmul(A, B) { const n = A.length, k = B.length, p = B[0].length; const C = Array.from({ length: n }, () => new Array(p).fill(0)); for (let i = 0; i < n; i++) for (let t = 0; t < k; t++) { const a = A[i][t]; if (a === 0) continue; const Bt = B[t], Ci = C[i]; for (let j = 0; j < p; j++) Ci[j] += a * Bt[j]; } return C; }
+const transpose = A => A[0].map((_, j) => A.map(r => r[j]));
+const addM = (A, B) => A.map((r, i) => r.map((v, j) => v + B[i][j]));
+const addBias = (A, b) => A.map(r => r.map((v, j) => v + b[j]));
+const scaleM = (A, s) => A.map(r => r.map(v => v * s));
+const gelu = x => 0.5 * x * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * x * x * x)));
+function softmax(r) { const mx = Math.max(...r); const e = r.map(v => (v === -Infinity ? 0 : Math.exp(v - mx))); const s = e.reduce((a, b) => a + b, 0); return e.map(v => v / s); }
+function layerNorm(X, g, b, eps = 1e-5) { const out = X.map(r => { const mu = r.reduce((a, v) => a + v, 0) / r.length; const va = r.reduce((a, v) => a + (v - mu) ** 2, 0) / r.length; const sd = Math.sqrt(va + eps); return r.map((v, j) => g[j] * (v - mu) / sd + b[j]); }); return { out }; }
+const norm = v => Math.sqrt(v.reduce((a, x) => a + x * x, 0));
+const cos = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0) / (norm(a) * norm(b) || 1);
+const ONES = new Array(D).fill(1), ZEROS = new Array(D).fill(0);
+const show = t => t === EOT ? t : t.replace(/Ġ/g, '␣');
+const decode = toks => toks.filter(t => t !== EOT).join('').replace(/Ġ/g, ' ');
+
+/* =====================================================================
+   Tokenização BPE (no estilo do GPT-2)
+   ===================================================================== */
+const chunksOf = text => (text.toLowerCase().normalize('NFC').match(/ ?[\p{L}\p{N}]+| ?[^\s\p{L}\p{N}]+/gu) || []).map(c => c.replace(/^ /, 'Ġ'));
+function trainBPE(text, maxM) {
+  const freq = new Map(); for (const c of chunksOf(text)) freq.set(c, (freq.get(c) || 0) + 1);
+  const words = [...freq.entries()].map(([w, f]) => ({ sym: [...w], f }));
+  const merges = [];
+  for (let k = 0; k < maxM; k++) {
+    const pc = new Map();
+    for (const w of words) for (let i = 0; i < w.sym.length - 1; i++) { const key = w.sym[i] + '\u0001' + w.sym[i + 1]; pc.set(key, (pc.get(key) || 0) + w.f); }
+    let best = null, bc = 1;
+    for (const [key, c] of pc) if (c > bc || (c === bc && best !== null && key < best)) { best = key; bc = c; }
+    if (!best) break;
+    const [a, b] = best.split('\u0001'), nt = a + b; merges.push({ a, b, nt, c: bc });
+    for (const w of words) { const s = []; for (let i = 0; i < w.sym.length; i++) { if (i < w.sym.length - 1 && w.sym[i] === a && w.sym[i + 1] === b) { s.push(nt); i++; } else s.push(w.sym[i]); } w.sym = s; }
+  }
+  return merges;
+}
+const MERGES = trainBPE(CORPUS, MAXM);
+const rankCache = new Map();
+function ranks(n) { if (!rankCache.has(n)) { const r = new Map(); for (let i = 0; i < n; i++) r.set(MERGES[i].a + '\u0001' + MERGES[i].b, i); rankCache.set(n, r); } return rankCache.get(n); }
+function bpeChunk(chunk, n) {
+  let sym = [...chunk]; const rank = ranks(n);
+  while (sym.length > 1) {
+    let bi = -1, br = Infinity;
+    for (let i = 0; i < sym.length - 1; i++) { const r = rank.get(sym[i] + '\u0001' + sym[i + 1]); if (r !== undefined && r < br) { br = r; bi = i; } }
+    if (bi < 0) break;
+    const { a, b, nt } = MERGES[br]; const s = [];
+    for (let i = 0; i < sym.length; i++) { if (i < sym.length - 1 && sym[i] === a && sym[i + 1] === b) { s.push(nt); i++; } else s.push(sym[i]); }
+    sym = s;
+  }
+  return sym;
+}
+const bpe = (text, n = MERGES.length) => chunksOf(text).flatMap(c => bpeChunk(c, n));
+const BASE_CHARS = [...new Set(chunksOf(CORPUS).flatMap(c => [...c]))].sort();
+const VOCAB = [EOT, ...BASE_CHARS, ...MERGES.map(x => x.nt)];
+const VID = new Map(VOCAB.map((w, i) => [w, i]));
+function vid(t) { if (!VID.has(t)) { VID.set(t, VOCAB.length); VOCAB.push(t); } return VID.get(t); }
+const CORPUS_COUNTS = Array.from({ length: MERGES.length + 1 }, (_, n) => bpe(CORPUS, n).length);
+
+/* =====================================================================
+   Modelo (bloco do GPT-2: Pre-LN)
+   ===================================================================== */
+const lnParams = () => ({ g: [...ONES], b: [...ZEROS] });
+function attnParams(rng) {
+  const P = { Wq: [], Wk: [], Wv: [] };
+  for (let i = 0; i < H; i++) { P.Wq.push(randM(rng, D, DK, 1.2 / Math.sqrt(D))); P.Wk.push(randM(rng, D, DK, 1.2 / Math.sqrt(D))); P.Wv.push(randM(rng, D, DK, 1 / Math.sqrt(D))); }
+  P.Wo = randM(rng, H * DK, D, 1 / Math.sqrt(H * DK));
+  return P;
+}
+const embCache = new Map();
+function embOf(tok) { const key = W.seed + '|' + tok; if (!embCache.has(key)) { const rng = makeRng(hashStr(tok) ^ Math.imul(W.seed, 2654435761)); embCache.set(key, Array.from({ length: D }, () => rng.g() * 0.6)); } return embCache.get(key); }
+function initModel(seed) {
+  const rng = makeRng(seed * 7919 + 13);
+  const blocks = [];
+  for (let l = 0; l < NL; l++) blocks.push({ ln1: lnParams(), att: attnParams(rng), ln2: lnParams(), mlp: { W1: randM(rng, D, DFF, Math.sqrt(2 / D)), b1: randV(rng, DFF, 0.1), W2: randM(rng, DFF, D, 0.7 / Math.sqrt(DFF)), b2: randV(rng, D, 0.05) } });
+  return { seed, wpe: randM(rng, CTX + 4, D, 0.3), blocks, lnf: lnParams() };
+}
+function mha(X, P, maskFn) {
+  const heads = [];
+  for (let i = 0; i < H; i++) {
+    const Q = matmul(X, P.Wq[i]), K = matmul(X, P.Wk[i]), V = matmul(X, P.Wv[i]);
+    const scores = matmul(Q, transpose(K)), scaled = scaleM(scores, 1 / Math.sqrt(DK));
+    const masked = scaled.map((r, a) => r.map((v, b) => (maskFn(a, b) ? -Infinity : v)));
+    const A = masked.map(softmax), Anomask = scaled.map(softmax), out = matmul(A, V);
+    heads.push({ Q, K, V, scores, scaled, masked, A, Anomask, out });
+  }
+  const concat = X.map((_, r) => heads.flatMap(hd => hd.out[r]));
+  return { heads, concat, out: matmul(concat, P.Wo) };
+}
+function block(X, B) {
+  const ln1 = layerNorm(X, B.ln1.g, B.ln1.b).out;
+  const att = mha(ln1, B.att, (a, b) => b > a);
+  const r1 = addM(X, att.out);
+  const ln2 = layerNorm(r1, B.ln2.g, B.ln2.b).out;
+  const pre = addBias(matmul(ln2, B.mlp.W1), B.mlp.b1), hid = pre.map(r => r.map(gelu)), mout = addBias(matmul(hid, B.mlp.W2), B.mlp.b2);
+  const r2 = addM(r1, mout);
+  return { X, ln1, att, r1, ln2, mlp: { pre, hid, out: mout }, out: r2 };
+}
+function forward(tokens) {
+  const ids = tokens.map(vid);
+  const te = tokens.map(t => embOf(t)), pe = tokens.map((_, i) => W.wpe[i]), X0 = addM(te, pe);
+  let X = X0; const blocks = [];
+  for (const B of W.blocks) { const r = block(X, B); blocks.push(r); X = r.out; }
+  const hf = layerNorm(X, W.lnf.g, W.lnf.b).out;
+  const Emb = VOCAB.map(t => embOf(t));
+  const logits = matmul(hf, transpose(Emb)), probs = logits.map(softmax);
+  return { tokens, ids, n: tokens.length, te, pe, X0, blocks, last: X, hf, logits, probs };
+}
+function promptTokens() { const t = bpe(S.prompt).slice(0, CTX); return t.length ? t : [EOT]; }
+function run() { const t = promptTokens(); t.forEach(vid); return forward(t); }
+function sampleDist(logits, T, k, p) {
+  const base = softmax(logits), temp = softmax(logits.map(v => v / T));
+  const order = temp.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]);
+  const keep = new Array(temp.length).fill(true);
+  if (k > 0) order.forEach(([, i], r) => { if (r >= k) keep[i] = false; });
+  let s1 = 0; temp.forEach((v, i) => { if (keep[i]) s1 += v; });
+  if (p < 1) { let cum = 0; for (const [v, i] of order) { if (!keep[i]) continue; if (cum >= p) keep[i] = false; cum += v / s1; } }
+  let s2 = 0; temp.forEach((v, i) => { if (keep[i]) s2 += v; });
+  return { base, temp, keep, final: temp.map((v, i) => (keep[i] ? v / s2 : 0)) };
+}
+function drawFrom(pr) { let r = Math.random(), acc = 0; for (let i = 0; i < pr.length; i++) { acc += pr[i]; if (r < acc) return i; } return pr.findIndex(v => v > 0); }
+function gpt2Params(L, d, V, ctx) { return { emb: V * d, pos: ctx * d, blocks: L * (12 * d * d + 13 * d), lnf: 2 * d, total: V * d + ctx * d + L * (12 * d * d + 13 * d) + 2 * d }; }
+
+/* =====================================================================
+   Componentes visuais
+   ===================================================================== */
+const NAVY = [18, 57, 107], AMB = [217, 130, 43], WHITE = [255, 255, 255];
+const mixRGB = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const rgb = c => `rgb(${c.join(',')})`;
+function colorOf(v, mx, seq) { let t = v / mx; t = Math.max(-1, Math.min(1, t)); if (seq) t = Math.pow(Math.max(0, t), 0.75); const c = t >= 0 ? mixRGB(WHITE, NAVY, t) : mixRGB(WHITE, AMB, -t); return [c, Math.abs(t) > 0.55 ? '#fff' : '#1d2a3a']; }
+function heat(Mx, o = {}) {
+  const nr = Mx.length, nc = Mx[0].length;
+  const rows = o.rows || Mx.map((_, i) => String(i)), cols = o.cols || dl(nc);
+  let mx = o.max; if (mx == null) { mx = 0; for (const r of Mx) for (const v of r) if (isFinite(v)) mx = Math.max(mx, Math.abs(v)); if (!mx) mx = 1; }
+  const vals = o.vals ?? (nc <= 10);
+  const cw = o.cw ?? (vals ? 44 : (nc > 40 ? 11 : 15)), ch = o.ch ?? (vals ? 25 : (nc > 40 ? 15 : 18));
+  const showCols = o.colLabels ?? (nc <= 14);
+  let h = `<div class="hm-wrap">`;
+  if (o.title) h += `<div class="hm-title">${o.title}${o.shape ? ' ' + o.shape : ''}</div>`;
+  h += `<div class="hm-scroll"><div class="hm" style="grid-template-columns:auto repeat(${nc},${cw}px);grid-auto-rows:${ch}px">`;
+  if (showCols) { h += `<div></div>`; for (let j = 0; j < nc; j++) h += `<div class="hc" title="${esc(cols[j])}">${esc(cols[j])}</div>`; }
+  for (let i = 0; i < nr; i++) {
+    const hl = o.hlRow === i;
+    h += `<div class="hr${hl ? ' hl' : ''}${o.rowAct ? ' clk' : ''}"${o.rowAct ? ` data-act="${o.rowAct}" data-v="${i}"` : ''}>${esc(rows[i])}</div>`;
+    for (let j = 0; j < nc; j++) {
+      const v = Mx[i][j], tip = `${esc(rows[i])} · ${esc(cols[j])}: `;
+      if (v === -Infinity) { h += `<div class="c ninf" data-tip="${tip}−∞ (mascarado)">${vals ? '−∞' : ''}</div>`; continue; }
+      const [bg, fg] = colorOf(v, mx, o.seq);
+      h += `<div class="c${hl ? ' hl' : ''}" style="background:${rgb(bg)};color:${fg}" data-tip="${tip}${fmt(v, 4)}">${vals ? fmt(v, o.dec ?? 2) : ''}</div>`;
+    }
+  }
+  h += `</div></div>`;
+  if (o.caption) h += `<div class="hm-cap">${o.caption}</div>`;
+  return h + `</div>`;
+}
+const sh = (toy, paper) => `<span class="shape">${toy}</span>${paper ? `<span class="shape paper">GPT-2: ${paper}</span>` : ''}`;
+const note = (kind, title, body) => `<div class="note ${kind}"><div class="note-t">${title}</div>${body}</div>`;
+const card = (title, body, cls = '') => `<div class="card ${cls}">${title ? `<h3>${title}</h3>` : ''}${body}</div>`;
+function tokChips(list, o = {}) { return `<div class="toks">${list.map((w, i) => `<span class="tok${w === EOT ? ' sp' : ''}${o.newFrom != null && i >= o.newFrom ? ' new' : ''}${o.act ? ' clk' : ''}${o.sel === i ? ' on' : ''}"${o.act ? ` data-act="${o.act}" data-v="${i}"` : ''}>${esc(show(w))}${o.ids !== false ? `<span class="id">${o.label ? o.label(w, i) : 'id ' + vid(w)}</span>` : ''}</span>`).join('')}</div>`; }
+function seg(act, cur, opts) { return `<span class="seg">${opts.map(([v, l]) => `<button class="${String(v) === String(cur) ? 'on' : ''}" data-act="${act}" data-v="${esc(v)}">${l}</button>`).join('')}</span>`; }
+const layerSeg = (withHead = true) => `<div class="ctrl-row"><span class="ctrl-lbl">Bloco</span>${seg('layer', S.layer, Array.from({ length: NL }, (_, l) => [l, String(l + 1)]))}${withHead ? `<span class="ctrl-lbl">Cabeça</span>${seg('head', S.head, Array.from({ length: H }, (_, h) => [h, String(h + 1)]))}` : ''}<span class="small muted">GPT-2 small: ${G2.L} blocos e ${G2.h} cabeças; aqui ${NL} e ${H}</span></div>`;
+function arcs(qT, kT, A, sel, act) {
+  const n = qT.length, k = kT.length, step = 25, top = 16, rowsN = Math.max(n, k);
+  const Hh = rowsN * step + top, Wd = 380, lx = 112, rx = Wd - 112;
+  const yq = i => top + i * step + (rowsN - n) * step / 2, yk = j => top + j * step + (rowsN - k) * step / 2;
+  let s = `<svg class="arcs" viewBox="0 0 ${Wd} ${Hh}" width="${Wd}">`;
+  const line = (i, j, on) => { const w = A[i][j]; if (w < 0.005) return ''; return `<line x1="${lx + 6}" y1="${yq(i) - 4}" x2="${rx - 6}" y2="${yk(j) - 4}" stroke="${on ? '#12396b' : '#8aa2bf'}" stroke-opacity="${on ? Math.min(1, 0.12 + w) : 0.05 + 0.25 * w}" stroke-width="${on ? 0.8 + 8 * w : 0.6 + 2 * w}" stroke-linecap="round"/>`; };
+  for (let i = 0; i < n; i++) if (sel !== i) for (let j = 0; j < k; j++) s += line(i, j, sel == null);
+  if (sel != null && sel < n) for (let j = 0; j < k; j++) s += line(sel, j, true);
+  qT.forEach((w, i) => { s += `<text class="q${sel === i ? ' sel' : ''}" x="${lx}" y="${yq(i)}" text-anchor="end" data-act="${act}" data-v="${i}">${esc(show(w))}</text>`; });
+  kT.forEach((w, j) => { s += `<text x="${rx}" y="${yk(j)}">${esc(show(w))}</text>`; if (sel != null && sel < n) s += `<text class="pct" x="${rx + 8 + show(w).length * 7.5}" y="${yk(j)}">${(A[sel][j] * 100).toFixed(0)}%</text>`; });
+  return s + `</svg>`;
+}
+function bars(items, o = {}) { const mx = o.max ?? Math.max(...items.map(i => i.v), 1e-9); return `<div class="bars">${items.map(it => `<div class="bar-row${it.hl ? ' hl' : ''}${it.cut ? ' cut' : ''}${it.act ? ' clk' : ''}"${it.act ? ` data-act="${it.act}" data-v="${esc(it.val)}"` : ''}><span class="bl" title="${esc(it.label)}">${esc(it.label)}</span><span class="bt">${it.ghost != null ? `<span class="bg" style="width:${it.ghost / mx * 100}%"></span>` : ''}<span class="bf" style="width:${Math.max(0, it.v) / mx * 100}%;position:relative"></span></span><span class="bv">${o.fmt ? o.fmt(it.v) : fmt(it.v, 3)}</span></div>`).join('')}</div>`; }
+function lineChart(series, o = {}) {
+  const Wd = o.w || 600, Hh = o.h || 230, pl = o.pl || 56, pr = 14, pt = 12, pb = 38;
+  const all = series.flatMap(s => s.pts);
+  const x0 = o.x0 ?? Math.min(...all.map(p => p[0])), x1 = o.x1 ?? Math.max(...all.map(p => p[0]));
+  const y0 = o.y0 ?? Math.min(...all.map(p => p[1])), y1 = o.y1 ?? Math.max(...all.map(p => p[1]));
+  const X = v => pl + (v - x0) / ((x1 - x0) || 1) * (Wd - pl - pr), Y = v => Hh - pb - (v - y0) / ((y1 - y0) || 1) * (Hh - pt - pb);
+  const fx = o.fx || (v => fmt(v, 0)), fy = o.fy || (v => fmt(v, 1));
+  let s = `<svg viewBox="0 0 ${Wd} ${Hh}" class="chart">`;
+  for (let k = 0; k <= 4; k++) { const yv = y0 + (y1 - y0) * k / 4, xv = x0 + (x1 - x0) * k / 4; s += `<line class="grid" x1="${pl}" x2="${Wd - pr}" y1="${Y(yv)}" y2="${Y(yv)}"/><text class="tick" x="${pl - 6}" y="${Y(yv) + 3}" text-anchor="end">${fy(yv)}</text><text class="tick" x="${X(xv)}" y="${Hh - pb + 15}" text-anchor="middle">${fx(xv)}</text>`; }
+  if (o.xl) s += `<text class="axl" x="${(pl + Wd - pr) / 2}" y="${Hh - 4}" text-anchor="middle">${o.xl}</text>`;
+  if (o.yl) s += `<text class="axl" transform="translate(12 ${(pt + Hh - pb) / 2}) rotate(-90)" text-anchor="middle">${o.yl}</text>`;
+  series.forEach(se => { s += `<polyline fill="none" stroke="${se.c}" stroke-width="${se.w || 2}"${se.dash ? ` stroke-dasharray="${se.dash}"` : ''} points="${se.pts.map(p => X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join(' ')}"/>`; });
+  (o.marks || []).forEach(mk => { s += `<circle cx="${X(mk[0])}" cy="${Y(mk[1])}" r="4.5" fill="${mk[2] || '#1288cf'}"/>${mk[3] ? `<text class="tick" x="${X(mk[0]) + (mk[4] || 8)}" y="${Y(mk[1]) - 6}" text-anchor="${mk[5] || 'start'}" style="fill:#12396b;font-weight:700">${mk[3]}</text>` : ''}`; });
+  s += `</svg>`;
+  const leg = series.filter(se => se.label).map(se => `<span><span class="sw" style="background:${se.c};height:4px"></span>${se.label}</span>`).join('');
+  return s + (leg ? `<div class="legend">${leg}</div>` : '');
+}
+function strip(v, mx) { return `<div class="strip">${v.map((x, j) => { const [bg] = colorOf(x, mx); return `<span style="background:${rgb(bg)}" data-tip="d${j}: ${fmt(x, 3)}"></span>`; }).join('')}</div>`; }
+const infld = (label, key) => `<label class="infld"><span>${label}</span><input data-chg="${key}" value="${esc(S[key])}" autocomplete="off" spellcheck="false"></label>`;
+
+/* =====================================================================
+   Diagrama
+   ===================================================================== */
+const DB = [
+  ['tok', 83, 566, 180, 26, 'Tokens (BPE)', 'io'],
+  ['emb-tok', 40, 510, 120, 30, 'Token embedding (wte)', 'emb'],
+  ['emb-pos', 186, 510, 120, 30, 'Posição (wpe)', 'emb'],
+  ['ln1', 103, 422, 140, 22, 'LayerNorm', 'norm'],
+  ['attn', 83, 372, 180, 36, 'Masked Multi-Head\nAttention', 'att'],
+  ['ln2', 103, 314, 140, 22, 'LayerNorm', 'norm'],
+  ['mlp', 83, 266, 180, 34, 'MLP (GELU)', 'ff'],
+  ['lnf', 103, 190, 140, 24, 'LayerNorm final', 'norm'],
+  ['head', 103, 148, 140, 24, 'Linear (wteᵀ)', 'out'],
+  ['softmax', 103, 108, 140, 24, 'Softmax', 'out'],
+  ['sample', 83, 64, 180, 28, 'Amostragem → próximo token', 'head'],
+];
+function diagramSVG() {
+  let s = `<svg viewBox="0 52 350 552" xmlns="http://www.w3.org/2000/svg"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#12396b"/></marker><marker id="ahs" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8aa2bf"/></marker><marker id="ahl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b0661a"/></marker></defs>`;
+  s += `<rect class="frame" data-blk="frame" x="60" y="230" width="226" height="230" rx="10"/>`;
+  s += `<text class="dg-lbl" x="66" y="241">DECODER</text><text class="dg-lbl" x="36" y="350" style="font-size:12px;cursor:pointer" data-blk="frame">N×</text>`;
+  const A = (d, cls = '', id = '') => `<path class="ar ${cls}" d="${d}" marker-end="url(#${cls.includes('res') ? 'ahs' : cls.includes('loop') ? 'ahl' : 'ah'})"${id ? ` data-blk="${id}"` : ''}/>`;
+  s += A('M173,566 V552 H100 V542') + A('M173,552 H246 V542');
+  s += A('M100,510 V478 H162') + A('M246,510 V478 H184');
+  s += A('M173,468 V446');
+  s += A('M173,422 V410') + A('M173,416 H140 V410') + A('M173,416 H206 V410');
+  s += A('M173,452 H279 V354 H182', 'res') + A('M173,372 V364');
+  s += A('M173,344 V338') + A('M173,341 H279 V248 H182', 'res') + A('M173,314 V302') + A('M173,266 V258');
+  s += A('M173,238 V216') + A('M173,190 V174') + A('M173,148 V134') + A('M173,108 V94');
+  s += A('M263,78 H334 V579 H265', 'loop', 'loop');
+  s += `<text class="dg-txt" x="340" y="330" transform="rotate(90 340 330)" text-anchor="middle" style="fill:#b0661a">o token escolhido volta para a entrada</text>`;
+  const sum = (cy) => `<g class="sum-g"><circle cx="173" cy="${cy}" r="9"/><path class="pl" d="M168,${cy} H178 M173,${cy - 5} V${cy + 5}"/></g>`;
+  s += sum(478) + sum(354) + sum(248);
+  for (const [id, x, y, w, h, label, cls] of DB) {
+    const lines = label.split('\n'), cy = y + h / 2, lh = 11.5;
+    const t = lines.map((l, k) => `<tspan x="${x + w / 2}" y="${(cy + (k - (lines.length - 1) / 2) * lh + 3.5).toFixed(1)}">${esc(l)}</tspan>`).join('');
+    s += `<g class="blk ${cls}" data-blk="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/><text>${t}</text></g>`;
+  }
+  s += `<text class="dg-txt" x="8" y="140">Sem encoder e sem</text><text class="dg-txt" x="8" y="152">cross-attention: só</text><text class="dg-txt" x="8" y="164">blocos de decoder</text><text class="dg-txt" x="8" y="176">empilhados.</text>`;
+  return s + `</svg>`;
+}
+
+/* =====================================================================
+   Passos
+   ===================================================================== */
+const STEPS = [
+  { id: 'visao-geral', g: 'Início', t: 'Visão geral', blocks: [], k: 'GPT = só a parte do decoder, treinada para uma única tarefa: prever o próximo token.', r: stepOverview },
+  { id: 'bpe', g: 'Entrada', t: 'Tokenização BPE', blocks: ['tok'], k: 'O vocabulário é construído juntando, repetidamente, o par de símbolos mais frequente.', r: stepBPE },
+  { id: 'embeddings', g: 'Entrada', t: 'Token + posição', blocks: ['emb-tok', 'emb-pos'], k: 'Cada token vira um vetor: embedding do token somado ao embedding (aprendido) da posição.', r: stepEmbeddings },
+  { id: 'atencao', g: 'Bloco', t: 'Atenção causal', blocks: ['attn', 'ln1'], k: 'Cada token só pode olhar para si mesmo e para os tokens anteriores.', r: stepAttention },
+  { id: 'bloco', g: 'Bloco', t: 'Bloco Pre-LN e fluxo residual', blocks: ['ln1', 'attn', 'ln2', 'mlp'], k: 'Cada subcamada lê uma versão normalizada do vetor e soma sua contribuição a ele.', r: stepBlock },
+  { id: 'pilha', g: 'Bloco', t: 'Pilha + LayerNorm final', blocks: ['frame', 'lnf'], k: 'N blocos idênticos em estrutura, seguidos de uma LayerNorm final.', r: stepStack },
+  { id: 'saida', g: 'Saída', t: 'Prever o próximo token', blocks: ['head', 'softmax'], k: 'Em cada posição, o modelo dá uma probabilidade para cada token do vocabulário.', r: stepOutput },
+  { id: 'amostragem', g: 'Saída', t: 'Temperatura, top-k e top-p', blocks: ['sample'], k: 'Como escolher o próximo token a partir das probabilidades.', r: stepSampling },
+  { id: 'geracao', g: 'Saída', t: 'Geração e KV cache', blocks: ['sample', 'loop'], k: 'Um token por vez; chaves e valores já calculados ficam guardados.', r: stepGeneration },
+  { id: 'escala', g: 'Escala', t: 'GPT-1 → GPT-2 → GPT-3', blocks: [], k: 'A mesma arquitetura, cada vez maior: de 117 milhões a 175 bilhões de parâmetros.', r: stepScale },
+  { id: 'uso', g: 'Escala', t: 'Do ajuste fino ao prompt', blocks: [], k: 'Ajuste fino (GPT-1) → zero-shot (GPT-2) → few-shot no prompt (GPT-3).', r: stepUse },
+  { id: 'jornada', g: 'Resumo', t: 'A jornada de um token', blocks: [], k: 'Todas as transformações aplicadas ao vetor de um único token.', r: stepJourney },
+  { id: 'quiz', g: 'Resumo', t: 'Teste rápido', blocks: [], k: 'Confira se as ideias principais ficaram claras.', r: stepQuiz },
+];
+const goStep = id => STEPS.findIndex(s => s.id === id);
+const lastIdx = () => R.n - 1;
+
+/* ---------- 0 ---------- */
+function stepOverview() {
+  const toyP = VOCAB.length * D + (CTX + 4) * D + NL * (12 * D * D + 13 * D) + 2 * D;
+  const flowItems = [['Texto', 'bpe'], ['Tokens BPE', 'bpe'], ['token + posição', 'embeddings'], ['Bloco ×N (atenção causal + MLP)', 'atencao'], ['LayerNorm final', 'pilha'], ['probabilidades do próximo token', 'saida'], ['amostragem', 'amostragem'], ['realimenta', 'geracao']];
+  return `
+<p class="lead">GPT significa <b>Generative Pre-trained Transformer</b>. A OpenAI pegou o Transformer e ficou <b>só com a parte do decoder</b> — sem encoder e sem cross-attention — e treinou o modelo numa única tarefa, simples e escalável: <b>prever o próximo token</b> de textos comuns. Gerar texto é repetir essa previsão, um token por vez.</p>
+${M(tx`P(x_1, x_2, \dots, x_n) = \prod_{t=1}^{n} P(x_t \mid x_1, \dots, x_{t-1})`)}
+<div class="grid2">
+${card('Só o decoder', `<p>No Transformer original, o decoder recebia a frase de origem pelo encoder. No GPT não existe "frase de origem": tudo — instrução, contexto, exemplos — é <b>uma única sequência</b> de tokens (o <i>prompt</i>), e o modelo continua essa sequência.</p>`)}
+${card('Por que funciona tão bem?', `<p>Prever a próxima palavra de qualquer texto exige saber gramática, fatos, raciocínio, estilo… O objetivo é simples, mas para cumpri-lo bem o modelo precisa aprender muito. E não precisa de rótulos: qualquer texto da internet vira dado de treino.</p>`)}
+</div>
+${card('O caminho dos dados', `<div class="flow">${flowItems.map(([t, id], i) => `${i ? '<span class="fa">→</span>' : ''}<span class="fs" data-act="goto" data-v="${goStep(id)}">${t}</span>`).join('')}</div><p class="small muted" style="margin:0">Repare na seta laranja do diagrama: o token escolhido volta para a entrada. É isso que faz o modelo ser <b>autorregressivo</b>.</p>`)}
+${card('Três gerações, a mesma arquitetura', `<div class="tbl-wrap"><table class="tbl"><tr><th></th><th class="num">GPT-1 (2018)</th><th class="num">GPT-2 small</th><th class="num">GPT-2 XL (2019)</th><th class="num">GPT-3 (2020)</th><th class="num">Playground</th></tr>
+<tr><td>Blocos N</td><td class="num">12</td><td class="num">12</td><td class="num">48</td><td class="num">96</td><td class="num">${NL}</td></tr>
+<tr><td>d<sub>model</sub></td><td class="num">768</td><td class="num">768</td><td class="num">1600</td><td class="num">12288</td><td class="num">${D}</td></tr>
+<tr><td>Cabeças</td><td class="num">12</td><td class="num">12</td><td class="num">25</td><td class="num">96</td><td class="num">${H}</td></tr>
+<tr><td>Contexto (tokens)</td><td class="num">512</td><td class="num">1024</td><td class="num">1024</td><td class="num">2048</td><td class="num">${CTX}</td></tr>
+<tr><td>Vocabulário</td><td class="num">40.478</td><td class="num">50.257</td><td class="num">50.257</td><td class="num">50.257</td><td class="num">${VOCAB.length}</td></tr>
+<tr><td>Parâmetros</td><td class="num">117 mi</td><td class="num">124 mi</td><td class="num">1,5 bi</td><td class="num">175 bi</td><td class="num">${fmtInt(toyP)}</td></tr>
+<tr><td>Dados</td><td class="num">BooksCorpus</td><td class="num" colspan="2" style="text-align:center">WebText (40 GB)</td><td class="num">~300 bi de tokens</td><td class="num">${CORPUS.split('.').length - 1} frases</td></tr></table></div>
+<p class="small muted" style="margin:0">Este playground segue o bloco do <b>GPT-2</b>, que virou o padrão dos modelos decoder-only. As diferenças para o GPT-1 e o GPT-3 aparecem nas notas de cada passo.</p>`)}
+<div class="grid2">
+${card('GPT × BERT', `<div class="tbl-wrap"><table class="tbl"><tr><th></th><th>BERT</th><th>GPT</th></tr>
+<tr><td>Parte do Transformer</td><td>encoder</td><td><b>decoder</b> (sem cross-attention)</td></tr>
+<tr><td>Atenção</td><td>bidirecional</td><td><b>causal</b>: só o passado</td></tr>
+<tr><td>Pré-treino</td><td>preencher lacunas (MLM)</td><td><b>prever o próximo token</b></td></tr>
+<tr><td>Sinal de treino</td><td>15% dos tokens</td><td><b>todos</b> os tokens</td></tr>
+<tr><td>Uso típico</td><td>classificar, extrair</td><td><b>gerar</b> texto; qualquer tarefa via prompt</td></tr></table></div>`)}
+${card('Como usar este playground', `<ul class="small">
+<li>Navegue com os botões no fim da página, as teclas <b>← →</b>, as etiquetas no topo ou os <b>blocos do diagrama</b>.</li>
+<li>Edite o <b>prompt</b> no topo: tudo é recalculado. Passe o mouse sobre as matrizes para ver os valores.</li>
+<li>O modelo é uma <b>miniatura com pesos aleatórios — não foi treinado</b>: as operações são as reais, mas o texto gerado não faz sentido.</li>
+<li>Veja também os playgrounds do <a href="https://bernardoaflalo.github.io/transformer-playground/">Transformer</a> e do <a href="https://bernardoaflalo.github.io/bert-playground/">BERT</a>.</li></ul>
+<div class="legend"><span><span class="sw" style="background:linear-gradient(90deg,#fff,#12396b)"></span>positivo</span><span><span class="sw" style="background:linear-gradient(90deg,#fff,#d9822b)"></span>negativo</span><span><span class="sw" style="background:repeating-linear-gradient(45deg,#e7ebf0,#e7ebf0 3px,#f6f8fa 3px,#f6f8fa 6px)"></span>mascarado</span></div>`)}
+</div>`;
+}
+
+/* ---------- 1 ---------- */
+function stepBPE() {
+  const n = S.nMerges;
+  const tryToks = bpe(S.bpeTry, n), promptT = bpe(S.prompt, n);
+  const rows = MERGES.map((x, i) => `<tr class="${i < n ? (i === n - 1 ? 'hl' : '') : 'dim'}"><td class="num">${i + 1}</td><td><code>${esc(show(x.a))}</code> + <code>${esc(show(x.b))}</code></td><td><code>${esc(show(x.nt))}</code></td><td class="num">${x.c}</td></tr>`).join('');
+  return `
+<p class="lead">O GPT-2 usa <b>Byte-Pair Encoding (BPE)</b>. A ideia é aprender o vocabulário a partir dos dados: começa-se com caracteres soltos e, repetidamente, junta-se o <b>par de símbolos vizinhos mais frequente</b> num símbolo novo. Pedaços frequentes ("Ġgato") viram um token só; palavras raras ficam quebradas em pedaços menores.</p>
+${card('Treinando o BPE num corpus pequeno', `<p class="small muted">Corpus de treino do playground (${CORPUS.split('.').length - 1} frases): <i>${esc(CORPUS.slice(0, 160))}…</i></p>
+<div class="ctrl-row"><label class="rng">número de merges <input type="range" min="0" max="${MERGES.length}" step="1" value="${n}" data-in="nMerges"><b id="lbl-nm">${n}</b></label><span class="small muted">vocabulário = ${BASE_CHARS.length} caracteres + merges</span></div>
+<div id="w-bpe">${bpeWidget()}</div>
+<div class="grid2" style="margin-top:12px;align-items:start"><div><div class="hm-title">Tabela de merges (na ordem em que foram aprendidos)</div><div class="scrollbox"><table class="tbl"><tr><th class="num">#</th><th>par</th><th>novo token</th><th class="num">freq.</th></tr>${rows}</table></div></div>
+<div><div class="hm-title">Tamanho do corpus em tokens × número de merges</div>${lineChart([{ c: '#12396b', pts: CORPUS_COUNTS.map((v, i) => [i, v]) }], { h: 230, x0: 0, y0: 0, xl: 'merges', yl: 'tokens no corpus', marks: [[n, CORPUS_COUNTS[n], '#1288cf', fmtInt(CORPUS_COUNTS[n])]] })}<p class="small muted">Mais merges = vocabulário maior = textos representados com menos tokens.</p></div></div>`)}
+${card('Tokenizando um texto novo', `${infld('Experimente um texto (Enter para aplicar)', 'bpeTry')}<p class="small">Com os primeiros <b>${n}</b> merges:</p>${tokChips(tryToks, { ids: false })}<p class="small">Com todos os ${MERGES.length} merges (o tokenizador do modelo):</p>${tokChips(bpe(S.bpeTry), { ids: false })}
+<p class="small muted" style="margin:0">Para codificar, aplicam-se os merges <b>na ordem em que foram aprendidos</b>. Palavras que não estavam no corpus ("gatinho", "pulou"…) são montadas com pedaços conhecidos — nunca há token desconhecido.</p>`)}
+<div class="grid2">
+${note('paper', 'No GPT-2: BPE em bytes', `<p>O GPT-2 aplica o BPE sobre <b>bytes</b> (UTF-8), não sobre caracteres: o vocabulário base tem só 256 símbolos, e qualquer texto — acentos, emojis, outras línguas, código — pode ser representado. Foram 50.000 merges, totalizando 50.257 tokens (256 bytes + 50.000 merges + <code>${EOT}</code>). O espaço antes de uma palavra faz parte do token e é mostrado como <code>Ġ</code> (aqui, <code>␣</code>): "gato" no meio da frase é <code>Ġgato</code>.</p>`)}
+${note('intu', 'Por que isso importa?', `<p>O modelo nunca vê letras nem palavras: vê IDs de tokens. Isso explica comportamentos curiosos de LLMs, como dificuldade para contar letras de uma palavra ou inverter uma string — "morango" pode ser um token só. Línguas com menos texto no treino (como o português, comparado ao inglês) costumam gastar mais tokens por palavra.</p>`)}
+</div>`;
+}
+function bpeWidget() {
+  const n = S.nMerges, first = CORPUS.split('.')[0] + '.', pt = bpe(S.prompt, n);
+  return `<div class="grid2" style="margin:0"><div><div class="hm-title">"${esc(first)}"</div>${tokChips(bpe(first, n), { ids: false })}</div><div><div class="hm-title">Seu prompt: "${esc(S.prompt)}"</div>${tokChips(pt, { ids: false })}</div></div>
+<p><span class="stat">vocabulário: <b>${BASE_CHARS.length + n}</b> tokens</span><span class="stat">corpus: <b>${fmtInt(CORPUS_COUNTS[n])}</b> tokens (${fmt(CORPUS_COUNTS[0] / CORPUS_COUNTS[n], 1)}× menor que em caracteres)</span>${n ? `<span class="stat">último merge: <b>${esc(show(MERGES[n - 1].a))} + ${esc(show(MERGES[n - 1].b))} → ${esc(show(MERGES[n - 1].nt))}</b></span>` : ''}</p>`;
+}
+
+/* ---------- 2 ---------- */
+function stepEmbeddings() {
+  const n = R.n, rows = R.tokens.map(show);
+  return `
+<p class="lead">Como no Transformer, cada token vira um vetor de d<sub>model</sub> números. Duas tabelas aprendidas são somadas: <b>wte</b> (<i>word token embedding</i>: uma linha por token do vocabulário) e <b>wpe</b> (<i>word position embedding</i>: uma linha por posição, de 0 até o tamanho do contexto).</p>
+${M(tx`h_0 = W_{te}[\,\text{ids}\,] + W_{pe}[\,0, 1, \dots, n-1\,]`)}
+${card(`Seu prompt em tokens ${sh('n = ' + n, 'n ≤ 1024')}`, tokChips(R.tokens))}
+${card('A soma', `<div class="flowrow">${heat(R.te, { rows, title: 'W<sub>te</sub>[ids]', cw: 38, shape: sh(`${n} × ${D}`, 'n × 768') })}<span class="op">+</span>${heat(R.pe, { rows: R.tokens.map((_, i) => 'pos ' + i), title: 'W<sub>pe</sub>[posições]', cw: 38 })}<span class="op">=</span>${heat(R.X0, { rows, title: 'h₀ (entrada do bloco 1)', cw: 38, shape: sh(`${n} × ${D}`, 'n × 768') })}</div>`)}
+<div class="grid2">
+${note('paper', 'Diferenças em relação ao Transformer original', `<ul><li><b>Posições aprendidas</b> (como no BERT), não senoidais. Consequência: o modelo tem um <b>tamanho máximo de contexto</b> fixo (1024 tokens no GPT-2, 2048 no GPT-3), igual ao número de linhas de W<sub>pe</sub>.</li><li>Não há multiplicação por √d<sub>model</sub> nem LayerNorm logo após a soma: no GPT-2 a normalização acontece dentro de cada bloco (próximos passos).</li><li>Não há embedding de segmento.</li></ul>`)}
+${note('intu', 'Tamanho da tabela', `<p>W<sub>te</sub> do GPT-2 small tem 50.257 × 768 ≈ <b>38,6 milhões</b> de parâmetros — quase um terço do modelo. A mesma matriz é reaproveitada na saída (passo "Prever o próximo token").</p>`)}
+</div>`;
+}
+
+/* ---------- 3 ---------- */
+function stepAttention() {
+  const l = S.layer, h = S.head, B = R.blocks[l], hd = B.att.heads[h], n = R.n, rows = R.tokens.map(show);
+  if (S.selQ == null || S.selQ >= n) S.selQ = n - 1;
+  const sel = S.selQ, A = S.maskOn ? hd.A : hd.Anomask;
+  return `
+<p class="lead">A atenção do GPT é a do decoder do Transformer: <b>causal</b>. Cada token só pode olhar para si mesmo e para os tokens <b>anteriores</b>. Como o modelo é treinado para prever o próximo token, ele não pode "espiar" o futuro.</p>
+${M(tx`\text{Attention}(Q,K,V) = \text{softmax}\!\left(\frac{QK^{\top}}{\sqrt{d_k}} + M\right)V, \qquad M_{ij} = \begin{cases} 0 & j \le i \\ -\infty & j > i \end{cases}`)}
+${layerSeg()}
+${card('Q, K e V (a partir da entrada normalizada)', `<div class="flowrow">${['Q', 'K', 'V'].map(k => heat(hd[k], { rows, cols: dl(DK), title: k, cw: 36, shape: k === 'Q' ? sh(`${n} × ${DK}`, 'n × 64') : '' })).join('')}</div><p class="small muted" style="margin:0">No GPT-2, Q, K e V são calculados a partir de <b>LayerNorm(h)</b>, não de h diretamente (veja o próximo passo).</p>`)}
+<div class="grid2">
+${card('Escores + máscara', heat(hd.masked, { rows, cols: rows, title: 'QK<sup>⊤</sup>/√d<sub>k</sub> + M', cw: 40, hlRow: sel, rowAct: 'selq', shape: sh(`${n} × ${n}`), vals: n <= 10 }))}
+${card('Pesos de atenção', `<div class="ctrl-row"><span class="ctrl-lbl">Máscara</span>${seg('mask', S.maskOn ? 1 : 0, [[1, 'ligada'], [0, 'desligada']])}</div>${heat(A, { rows, cols: rows, seq: true, max: 1, title: 'A = softmax(…)', cw: 40, hlRow: sel, rowAct: 'selq', vals: n <= 10 })}`)}
+</div>
+${card(`Para onde olha "${esc(rows[sel])}"?`, `<div class="grid2" style="align-items:start;margin:0"><div>${arcs(R.tokens, R.tokens, A, sel, 'selq')}</div><div><p class="small">${S.maskOn ? `O token na posição ${sel} distribui sua atenção apenas entre as posições 0 a ${sel}. A primeira posição só pode olhar para si mesma (100%).` : '<b>Sem máscara</b>, cada posição veria as palavras seguintes — inclusive aquela que deveria prever. No treino, o modelo aprenderia a copiar e seria inútil na hora de gerar, quando o futuro ainda não existe.'}</p>
+<p class="small muted">Clique em outros tokens (à esquerda) para comparar. A <b>última</b> posição é a mais importante na geração: é ela que prevê o token seguinte.</p></div></div>`)}
+${note('intu', 'Por que isso permite treinar em paralelo', `<p>Uma frase de n tokens vira <b>n exemplos de treino</b> de uma vez: a posição 0 prevê o token 1, a posição 1 prevê o token 2, e assim por diante — todas calculadas numa única passada pela rede, porque a máscara garante que nenhuma posição vê a própria resposta. Compare com o BERT, que só aprende com 15% dos tokens.</p>`)}`;
+}
+
+/* ---------- 4 ---------- */
+function stepBlock() {
+  const l = S.layer, B = R.blocks[l], n = R.n, rows = R.tokens.map(show);
+  const mx = Math.max(...[B.X, B.att.out, B.r1, B.mlp.out, B.out].flat(2).map(Math.abs));
+  return `
+<p class="lead">O GPT-2 mudou um detalhe do bloco que se tornou padrão em quase todos os LLMs: a LayerNorm vem <b>antes</b> de cada subcamada (<b>Pre-LN</b>), e a soma residual fica "limpa", sem normalização no caminho principal.</p>
+<div class="grid2">
+${card('Transformer original e GPT-1 (Post-LN)', M(tx`\begin{aligned} h &\leftarrow \text{LN}\big(h + \text{Attn}(h)\big) \\ h &\leftarrow \text{LN}\big(h + \text{MLP}(h)\big) \end{aligned}`), 'soft')}
+${card('GPT-2 e sucessores (Pre-LN)', M(tx`\begin{aligned} h &\leftarrow h + \text{Attn}\big(\text{LN}(h)\big) \\ h &\leftarrow h + \text{MLP}\big(\text{LN}(h)\big) \end{aligned}`), 'soft')}
+</div>
+${note('intu', 'O "fluxo residual" (residual stream)', `<p>Pense no vetor h de cada token como uma <b>esteira</b> que atravessa o modelo inteiro. Cada subcamada <b>lê</b> uma cópia normalizada da esteira e <b>escreve</b> sua contribuição somando-a de volta. Nada é sobrescrito: as informações se acumulam. Isso estabiliza o treino de redes muito profundas (o GPT-3 tem 96 blocos).</p>`)}
+${layerSeg(false)}
+${card(`① Subcamada de atenção — bloco ${l + 1}`, `<div class="flowrow">${heat(B.X, { rows, title: 'h (entrada)', cw: 34, max: mx })}<span class="op">→ LN →</span>${heat(B.ln1, { rows, title: 'LN(h)', cw: 34 })}<span class="op">→ Attn →</span>${heat(B.att.out, { rows, title: 'Attn(LN(h))', cw: 34, max: mx })}</div>
+<div class="flowrow"><span class="op">h +</span>${heat(B.att.out, { rows, title: 'contribuição', cw: 34, max: mx })}<span class="op">=</span>${heat(B.r1, { rows, title: 'h após a atenção', cw: 34, max: mx, shape: sh(`${n} × ${D}`, 'n × 768') })}</div>`)}
+${card('② Subcamada MLP (feed-forward com GELU)', `${M(tx`\text{MLP}(x) = \text{GELU}(xW_1 + b_1)\,W_2 + b_2, \qquad W_1 \in \mathbb{R}^{d \times 4d}`)}
+<div class="flowrow">${heat(B.ln2, { rows, title: 'LN(h)', cw: 30 })}<span class="op">→</span>${heat(B.mlp.hid, { rows, cols: dl(DFF, 'h'), title: 'GELU(xW₁ + b₁)', shape: sh(`${n} × ${DFF}`, 'n × 3072') })}<span class="op">→</span>${heat(B.mlp.out, { rows, title: 'MLP(LN(h))', cw: 30, max: mx })}</div>
+<div class="flowrow"><span class="op">h +</span>${heat(B.mlp.out, { rows, title: 'contribuição', cw: 34, max: mx })}<span class="op">=</span>${heat(B.out, { rows, title: `saída do bloco ${l + 1}`, cw: 34, max: mx, shape: sh(`${n} × ${D}`, 'n × 768') })}</div>`)}
+<div class="grid2">
+${note('paper', 'No paper do GPT-2', `<p>"A layer normalization foi movida para a entrada de cada sub-bloco [...] e uma layer normalization adicional foi acrescentada após o bloco final." Além disso, os pesos das camadas que escrevem no fluxo residual são inicializados escalados por 1/√N (N = número de camadas residuais), para que a soma não cresça demais.</p>`)}
+${note('paper', 'E a ativação?', `<p>Desde o GPT-1 a MLP usa <b>GELU</b> (como o BERT) e tem 4× d<sub>model</sub> neurônios internos (3072 no GPT-2 small). Modelos mais recentes trocaram por variantes como SwiGLU, e a LayerNorm por RMSNorm, mas a estrutura do bloco continua a mesma.</p>`)}
+</div>`;
+}
+
+/* ---------- 5 ---------- */
+function stepStack() {
+  const n = R.n, rows = R.tokens.map(show);
+  const mats = [['h₀', R.X0], ...R.blocks.map((B, l) => [`após bloco ${l + 1}`, B.out]), ['LN final', R.hf]];
+  const norms = mats.map(([t, A]) => [t, A.reduce((s, r) => s + norm(r), 0) / A.length]);
+  return `
+<p class="lead">O bloco se repete N vezes (12 no GPT-2 small, 96 no GPT-3), cada um com pesos próprios. Como a entrada e a saída de cada bloco têm o mesmo formato, eles se encaixam um após o outro. No final, uma <b>LayerNorm final</b> (ln_f) prepara os vetores para a camada de saída.</p>
+${card(`Os ${NL} blocos do playground`, `<div class="flowrow">${mats.map(([t, A], i) => (i ? `<span class="op">→</span>` : '') + heat(A, { rows, title: t, cw: 30 })).join('')}</div>`)}
+${card('O tamanho do vetor ao longo da pilha', `<div class="tbl-wrap"><table class="tbl"><tr><th>etapa</th><th class="num">‖h‖ médio</th></tr>${norms.map(([t, v]) => `<tr><td>${t}</td><td class="num">${fmt(v, 3)}</td></tr>`).join('')}</table></div><p class="small muted" style="margin:0">Com Pre-LN, o fluxo residual nunca é normalizado no caminho principal; seu tamanho tende a crescer bloco a bloco. Por isso é necessária a LayerNorm final antes da saída.</p>`)}
+${card('Todos os padrões de atenção', `<div class="flowrow" style="align-items:start">${R.blocks.map((B, l) => B.att.heads.map((hd, h) => heat(hd.A, { rows, cols: rows, seq: true, max: 1, vals: false, cw: 16, ch: 16, title: `bloco ${l + 1} · cabeça ${h + 1}`, colLabels: false })).join('')).join('')}</div><p class="small muted" style="margin:0">Todos triangulares: a máscara causal vale em <b>todos</b> os blocos. No GPT-3, os blocos alternam entre atenção densa e atenção esparsa em faixas locais, para economizar contas.</p>`)}
+${note('intu', 'O que os blocos fazem? (estudos de interpretabilidade)', `<p>Pesquisas em modelos treinados encontraram, por exemplo, <b>cabeças de indução</b>: se o texto já contém "Harry Potter" e aparece de novo "Harry", uma cabeça olha para o token que veio depois do "Harry" anterior e ajuda a prever "Potter". Mecanismos assim parecem estar por trás da capacidade de aprender com exemplos no prompt.</p>`)}`;
+}
+
+/* ---------- 6 ---------- */
+function stepOutput() {
+  const n = R.n; if (S.outPos == null || S.outPos >= n) S.outPos = n - 1;
+  const pos = S.outPos, pr = R.probs[pos], V = VOCAB.length;
+  const tgt = pos < n - 1 ? R.tokens[pos + 1] : null, tid = tgt != null ? vid(tgt) : -1;
+  const top = pr.map((p, i) => [p, i]).sort((a, b) => b[0] - a[0]).slice(0, 10);
+  const items = top.map(([p, i]) => ({ label: show(VOCAB[i]), v: p, hl: i === tid }));
+  if (tgt != null && !top.some(t => t[1] === tid)) items.push({ label: '… ' + show(tgt), v: pr[tid], hl: true });
+  const losses = R.tokens.slice(1).map((t, i) => -Math.log(R.probs[i][vid(t)]));
+  return `
+<p class="lead">A saída da LayerNorm final passa por uma camada linear que dá um escore (logit) para cada token do vocabulário. Essa camada usa a <b>mesma matriz</b> W<sub>te</sub> da entrada, transposta. O softmax transforma os escores em probabilidades.</p>
+${M(tx`\text{logits} = \text{LN}_f(h_N)\;W_{te}^{\top} \qquad P(x_{t+1} \mid x_{\le t}) = \text{softmax}(\text{logits}_t)`)}
+${card('Cada posição prevê o token seguinte', `<div class="tbl-wrap"><table class="tbl"><tr><th>posição</th>${R.tokens.map((_, i) => `<th class="c">${i}</th>`).join('')}</tr><tr><td><b>entrada</b></td>${R.tokens.map(t => `<td class="c">${esc(show(t))}</td>`).join('')}</tr><tr><td><b>deve prever</b></td>${R.tokens.map((_, i) => `<td class="c" style="color:#1288cf"><b>${i < n - 1 ? esc(show(R.tokens[i + 1])) : '?'}</b></td>`).join('')}</tr></table></div>
+<p class="small muted" style="margin:0">No treino, todas as posições têm resposta conhecida (o próprio texto, deslocado uma posição) e a perda é a média de −log P(token correto). Na geração, só interessa a <b>última</b> posição: o "?" é o que o modelo vai escrever.</p>`)}
+${card('Logits e probabilidades', `${heat(R.logits, { rows: R.tokens.map(show), cols: VOCAB.map(show), title: 'logits', shape: sh(`${n} × ${V}`, 'n × 50257'), vals: false, cw: 6, ch: 16, colLabels: false })}
+<p>Escolha a posição:</p>${tokChips(R.tokens, { act: 'outpos', sel: pos, label: (_, i) => i < n - 1 ? '→ ' + show(R.tokens[i + 1]) : '→ ?' })}
+<div class="grid2" style="align-items:start;margin:0"><div><div class="hm-title">Top 10 após "${esc(decode(R.tokens.slice(0, pos + 1)))}"</div>${bars(items, { fmt: pct })}</div><div>
+${tgt != null ? `<p><span class="stat">correto: <b>${esc(show(tgt))}</b></span><span class="stat">P = <b>${pct(pr[tid])}</b></span><span class="stat">−log P = <b>${fmt(-Math.log(pr[tid]), 3)}</b></span></p>` : '<p class="small">Última posição: não há resposta conhecida — é daqui que sai o próximo token gerado.</p>'}
+${losses.length ? `<p><span class="stat">perda média do prompt: <b>${fmt(losses.reduce((a, b) => a + b, 0) / losses.length, 3)}</b></span><span class="stat">chute uniforme ln(V): <b>${fmt(Math.log(V), 3)}</b></span></p>` : ''}
+<p class="small muted">Modelo não treinado: probabilidades próximas de 1/V. Treinar = ajustar todos os pesos para diminuir essa perda em bilhões de tokens.</p></div></div>`)}
+${note('paper', 'Pré-treino nos papers', `<p><b>GPT-1</b>: Adam, taxa máxima 2,5e−4 com warmup de 2.000 passos e decaimento cosseno, 100 épocas no BooksCorpus (mais de 7.000 livros), lotes de 64 sequências de 512 tokens. <b>GPT-2</b>: WebText, 8 milhões de páginas (40 GB) a partir de links do Reddit com pelo menos 3 votos. <b>GPT-3</b>: 300 bilhões de tokens de uma mistura de Common Crawl filtrado, WebText2, dois corpora de livros e Wikipédia.</p>`)}`;
+}
+
+/* ---------- 7 ---------- */
+const ILL = { ctx: 'o gato subiu no', w: ['telhado', 'sofá', 'muro', 'carro', 'jardim', 'armário', 'céu', 'banco', 'oceano', 'computador'], l: [4.2, 3.5, 3.1, 2.4, 2.2, 1.5, 0.6, 0.3, -0.8, -1.2] };
+function sampWidget() {
+  const sd = sampleDist(ILL.l, S.temp, S.topk, S.topp);
+  const mx = Math.max(...sd.final, ...sd.base);
+  const items = ILL.w.map((w, i) => ({ label: w, v: sd.final[i], ghost: sd.base[i], hl: sd.final[i] === Math.max(...sd.final), cut: !sd.keep[i] }));
+  const kept = sd.keep.filter(Boolean).length;
+  let counts = '';
+  if (S.sampCounts) { const tot = S.sampCounts.reduce((a, b) => a + b, 0); counts = `<div class="hm-title" style="margin-top:12px">${tot} amostras sorteadas</div>${bars(ILL.w.map((w, i) => ({ label: w, v: S.sampCounts[i] })), { fmt: v => String(v) })}`; }
+  return `<div class="grid2" style="align-items:start;margin:0"><div><div class="hm-title">P(próxima palavra | "${ILL.ctx}")</div>${bars(items, { max: mx, fmt: pct })}<div class="legend" style="margin-top:6px"><span><span class="sw" style="background:rgba(138,162,191,.3);border-right:2px solid #8aa2bf"></span>original (T = 1, sem cortes)</span><span><span class="sw" style="background:#12396b"></span>após temperatura e cortes</span></div></div>
+<div><p><span class="stat">candidatos restantes: <b>${kept}</b></span><span class="stat">maior probabilidade: <b>${pct(Math.max(...sd.final))}</b></span></p><button class="btn ghost" data-act="samp">🎲 Sortear 100 vezes</button>${counts}</div></div>`;
+}
+function stepSampling() {
+  return `
+<p class="lead">O modelo entrega uma distribuição de probabilidade; falta <b>escolher</b> um token. Escolher sempre o mais provável (<i>greedy</i>) tende a gerar textos repetitivos e sem graça. Por isso, normalmente se <b>sorteia</b> — com alguns controles.</p>
+${M(tx`P_T(i) = \frac{e^{z_i/T}}{\sum_j e^{z_j/T}}`)}
+${card('Laboratório de amostragem', `<div class="ctrl-row"><label class="rng">temperatura T <input type="range" min="0.1" max="2" step="0.05" value="${S.temp}" data-in="temp"><b id="lbl-temp">${fmt(S.temp, 2)}</b></label><label class="rng">top-k <input type="range" min="0" max="10" step="1" value="${S.topk}" data-in="topk"><b id="lbl-topk">${S.topk || 'off'}</b></label><label class="rng">top-p <input type="range" min="0.05" max="1" step="0.05" value="${S.topp}" data-in="topp"><b id="lbl-topp">${S.topp >= 1 ? 'off' : fmt(S.topp, 2)}</b></label></div>
+<div id="w-samp">${sampWidget()}</div>
+<p class="small muted" style="margin-top:8px">Os logits deste laboratório são <b>ilustrativos</b> (escritos à mão, como um modelo treinado poderia produzir), para que o efeito dos controles fique visível. No passo seguinte, os mesmos controles são aplicados ao modelo do playground.</p>`)}
+<div class="grid3" style="margin-bottom:16px">
+${card('Temperatura', `<p class="small" style="margin:0">Divide os logits por T antes do softmax. <b>T &lt; 1</b> deixa a distribuição mais concentrada (mais previsível, mais "conservadora"). <b>T &gt; 1</b> achata a distribuição (mais criativa, mais erros). T → 0 equivale ao greedy.</p>`, 'soft')}
+${card('Top-k', `<p class="small" style="margin:0">Mantém só os <b>k</b> tokens mais prováveis e zera o resto, antes de sortear. Corta a "cauda" de opções absurdas. O GPT-2 usou k = 40 nas amostras divulgadas no paper.</p>`, 'soft')}
+${card('Top-p (nucleus)', `<p class="small" style="margin:0">Mantém o <b>menor</b> conjunto de tokens cuja probabilidade acumulada chega a p (ex.: 0,9). Quando o modelo está seguro, sobram poucos candidatos; quando está em dúvida, sobram muitos (Holtzman et al., 2019).</p>`, 'soft')}
+</div>
+${note('try', 'Experimente', `<p>Coloque T = 0,1: "telhado" fica com quase 100%. Coloque T = 2: até "computador" passa a ter chance. Agora deixe T = 1,5 e ligue top-p = 0,8: a cauda absurda é cortada, mas sobra variedade.</p>`)}`;
+}
+
+/* ---------- 8 ---------- */
+function stepGeneration() {
+  if (!S.gen) S.gen = [...R.tokens];
+  const start = R.n, seq = S.gen, n = seq.length;
+  const done = seq[n - 1] === EOT || n >= CTX;
+  const f = forward(seq), hd = f.blocks[0].att.heads[0];
+  let dist = '';
+  if (!done) {
+    const sd = sampleDist(f.logits[n - 1], S.genMode === 'greedy' ? 1 : S.temp, S.genMode === 'greedy' ? 0 : S.topk, S.genMode === 'greedy' ? 1 : S.topp);
+    const top = sd.final.map((p, i) => [p, i, sd.base[i]]).sort((a, b) => b[2] - a[2]).slice(0, 8);
+    dist = `<div class="hm-title">Próximo token: distribuição na última posição</div>${bars(top.map(([p, i, b], k) => ({ label: show(VOCAB[i]), v: p, ghost: b, hl: k === 0, cut: !sd.keep[i] })), { fmt: pct })}`;
+  }
+  const genCount = n - start, noCache = S.genLog.reduce((a, g) => a + g.len, 0);
+  return `
+<p class="lead">Para gerar, o modelo repete o ciclo: calcula a distribuição da <b>última</b> posição, escolhe um token, acrescenta-o ao final da sequência e recomeça — até gerar <code>${EOT}</code> ou atingir o limite de contexto.</p>
+${card('Gerando a partir do seu prompt', `<div class="gen-text">${esc(decode(seq.slice(0, start)))}<span class="new">${esc(decode(seq.slice(start)))}</span></div>
+${tokChips(seq, { ids: false, newFrom: start })}
+<div class="ctrl-row"><span class="ctrl-lbl">Escolha</span>${seg('genmode', S.genMode, [['greedy', 'greedy (mais provável)'], ['sample', `amostragem (T=${fmt(S.temp, 2)}, top-k=${S.topk || 'off'}, top-p=${S.topp >= 1 ? 'off' : fmt(S.topp, 2)})`]])}<button class="btn acc" data-act="gennext" ${done ? 'disabled' : ''}>Gerar próximo token</button><button class="btn ghost" data-act="genreset">Reiniciar</button>${done ? '<b class="small">Fim: limite de contexto ou fim de texto.</b>' : ''}</div>
+${dist}`)}
+${card('KV cache: não recalcular o passado', `<p>Por causa da máscara causal, os vetores K e V de um token <b>nunca mudam</b> depois que ele é processado: tokens futuros não os afetam. Então, a cada passo, basta calcular Q, K e V do token <b>novo</b> e reaproveitar os K e V antigos, guardados na memória — o <b>KV cache</b>.</p>
+<div class="flowrow">${heat(hd.K, { rows: seq.map(show), cols: dl(DK), title: 'cache de K (bloco 1, cabeça 1)', cw: 38, hlRow: n - 1 })}${heat(hd.V, { rows: seq.map(show), cols: dl(DK), title: 'cache de V', cw: 38, hlRow: n - 1 })}${heat([hd.A[n - 1]], { rows: [show(seq[n - 1])], cols: seq.map(show), seq: true, max: 1, title: 'atenção do token novo', cw: 40, vals: n <= 9 })}</div>
+<p><span class="stat">tokens gerados: <b>${genCount}</b></span><span class="stat">posições processadas com cache: <b>${start + genCount}</b></span><span class="stat">sem cache: <b>${start + noCache}</b></span></p>
+<p class="small muted" style="margin:0">A linha destacada é a única calculada neste passo; as outras vieram do cache. Sem cache, o custo de gerar cresce com o quadrado do tamanho do texto. O preço é memória: no GPT-3, o cache guarda K e V de 96 blocos × 2048 posições × 12.288 dimensões.</p>`)}
+${note('warn', 'Lembrete', `<p>Com pesos aleatórios, o texto gerado é sem sentido. Com um modelo treinado, o mesmo laço, com o prompt "o gato subiu no", produziria algo como "telhado e ficou olhando a rua".</p>`)}`;
+}
+
+/* ---------- 9 ---------- */
+const PRESETS = [['GPT-1', 12, 768, 40478, 512], ['GPT-2 small', 12, 768, 50257, 1024], ['GPT-2 medium', 24, 1024, 50257, 1024], ['GPT-2 large', 36, 1280, 50257, 1024], ['GPT-2 XL', 48, 1600, 50257, 1024], ['GPT-3', 96, 12288, 50257, 2048]];
+const kaplan = N => Math.pow(8.8e13 / N, 0.076);
+function calcWidget() {
+  const p = gpt2Params(S.calcL, S.calcD, S.calcV, S.calcCtx), nonEmb = S.calcL * 12 * S.calcD * S.calcD;
+  const pts = Array.from({ length: 161 }, (_, i) => { const x = 4 + i * 0.05; return [x, kaplan(Math.pow(10, x))]; });
+  const marks = PRESETS.filter(([n]) => ['GPT-1', 'GPT-2 XL', 'GPT-3'].includes(n)).map(([n, L, d]) => { const N = L * 12 * d * d; return [Math.log10(N), kaplan(N), '#8aa2bf', n, n === 'GPT-3' ? -8 : 8, n === 'GPT-3' ? 'end' : 'start']; });
+  marks.push([Math.log10(nonEmb), kaplan(nonEmb), '#1288cf', 'seu modelo']);
+  return `<div class="grid2" style="align-items:start;margin:0"><div><div class="tbl-wrap"><table class="tbl">
+<tr><td>Embeddings de token (V × d)</td><td class="num">${fmtBig(p.emb)}</td></tr>
+<tr><td>Embeddings de posição (contexto × d)</td><td class="num">${fmtBig(p.pos)}</td></tr>
+<tr><td>Blocos: N × (12d² + 13d)</td><td class="num">${fmtBig(p.blocks)}</td></tr>
+<tr><td>LayerNorm final</td><td class="num">${fmtInt(p.lnf)}</td></tr>
+<tr class="hl"><td><b>Total</b></td><td class="num"><b>${fmtBig(p.total)}</b></td></tr></table></div>
+<p><span class="stat">memória só dos pesos (16 bits): <b>${fmt(p.total * 2 / 1e9, p.total > 1e9 ? 0 : 2)} GB</b></span><span class="stat">fração nos blocos: <b>${pct(p.blocks / p.total)}</b></span></p>
+<p class="small muted">De onde vem 12d²: na atenção, W<sup>Q</sup>, W<sup>K</sup>, W<sup>V</sup> e W<sup>O</sup> têm d² cada (4d²); na MLP, W₁ e W₂ têm 4d² cada (8d²).</p></div>
+<div><div class="hm-title">Lei de escala: perda × parâmetros (Kaplan et al., 2020)</div>${lineChart([{ c: '#12396b', pts }], { h: 230, x0: 4, x1: 12, y0: 1.2, y1: 6, xl: 'parâmetros sem embeddings (escala log)', yl: 'perda de teste (nats)', fx: pow10, fy: v => fmt(v, 1), marks })}
+<p class="small muted">A perda cai como uma lei de potência, L(N) ≈ (8,8·10¹³ / N)<sup>0,076</sup>, quando dados e computação não são o gargalo. Essa previsibilidade motivou a aposta no GPT-3.</p></div></div>`;
+}
+function stepScale() {
+  return `
+<p class="lead">Entre 2018 e 2020, a arquitetura mudou muito pouco. O que mudou foi a <b>escala</b>: mais blocos, vetores maiores, contexto mais longo e muito mais dados. E, com a escala, surgiram capacidades novas.</p>
+${card('Calculadora de parâmetros (bloco do GPT-2)', `<div class="ctrl-row"><span class="ctrl-lbl">Modelos</span>${seg('preset', '', PRESETS.map((p, i) => [i, p[0]]))}</div>
+<div class="ctrl-row"><label class="rng">blocos N <input type="range" min="1" max="96" step="1" value="${S.calcL}" data-in="calcL"><b id="lbl-calcL">${S.calcL}</b></label><label class="rng">d<sub>model</sub> <input type="range" min="64" max="12288" step="64" value="${S.calcD}" data-in="calcD"><b id="lbl-calcD">${S.calcD}</b></label><span class="small muted">vocabulário ${fmtInt(S.calcV)} · contexto ${fmtInt(S.calcCtx)}</span></div>
+<div id="w-calc">${calcWidget()}</div>`)}
+<div class="grid2">
+${card('Dados do GPT-3', `<div class="tbl-wrap"><table class="tbl"><tr><th>Fonte</th><th class="num">tokens</th><th class="num">peso no treino</th></tr>
+<tr><td>Common Crawl (filtrado)</td><td class="num">410 bi</td><td class="num">60%</td></tr>
+<tr><td>WebText2</td><td class="num">19 bi</td><td class="num">22%</td></tr>
+<tr><td>Books1</td><td class="num">12 bi</td><td class="num">8%</td></tr>
+<tr><td>Books2</td><td class="num">55 bi</td><td class="num">8%</td></tr>
+<tr><td>Wikipédia</td><td class="num">3 bi</td><td class="num">3%</td></tr></table></div><p class="small muted" style="margin:0">Fontes de mais qualidade foram amostradas com mais frequência que o seu tamanho sugeriria. Total visto no treino: 300 bilhões de tokens.</p>`)}
+${note('paper', 'Mudanças arquiteturais ao longo do caminho', `<ul><li><b>GPT-1 → GPT-2</b>: Pre-LN, LayerNorm final, inicialização escalada por 1/√N, contexto de 512 → 1024, vocabulário BPE em bytes (50.257).</li><li><b>GPT-2 → GPT-3</b>: mesma arquitetura, com atenção que alterna entre densa e esparsa em faixas locais (como no Sparse Transformer) e contexto de 2048.</li><li>Todo o resto — embeddings, atenção causal, MLP com GELU, pesos compartilhados na saída — é igual.</li></ul>`)}
+</div>`;
+}
+
+/* ---------- 10 ---------- */
+function stepUse() {
+  let pane = '';
+  if (S.useTab === 'gpt1') pane = `<p><b>GPT-1 (2018): pré-treino + ajuste fino.</b> Depois do pré-treino, o modelo era ajustado com dados rotulados para cada tarefa, como o BERT. A novidade: em vez de mudar a arquitetura, a entrada era <b>transformada numa única sequência</b> com tokens delimitadores, e um classificador linear era colocado sobre o vetor do último token.</p>
+<div class="tbl-wrap"><table class="tbl"><tr><th>Tarefa</th><th>Entrada transformada</th></tr>
+<tr><td>Classificação</td><td><code>[início] texto [extrair]</code> → linear</td></tr>
+<tr><td>Inferência (implicação)</td><td><code>[início] premissa $ hipótese [extrair]</code> → linear</td></tr>
+<tr><td>Similaridade</td><td>as duas ordens (A $ B e B $ A), somadas → linear</td></tr>
+<tr><td>Múltipla escolha</td><td><code>[início] contexto $ resposta_k [extrair]</code> para cada k → softmax</td></tr></table></div>
+<p class="small muted">Durante o ajuste fino, a perda de modelagem de linguagem continuava sendo usada como objetivo auxiliar (peso λ = 0,5). O GPT-1 bateu o estado da arte em 9 de 12 tarefas — meses antes do BERT.</p>`;
+  else if (S.useTab === 'gpt2') pane = `<p><b>GPT-2 (2019): zero-shot.</b> A proposta do paper: um modelo de linguagem grande o bastante aprende tarefas <b>sem nenhum ajuste fino</b>, desde que a tarefa seja descrita no próprio texto. Exemplos usados no paper:</p>
+<div class="prompt">[um artigo de notícia inteiro…]
+TL;DR:<span class="ans"> resumo gerado pelo modelo</span></div>
+<p class="small" style="margin-top:8px">Para resumir, bastou acrescentar "TL;DR:" ("muito longo, não li", comum na internet) depois do texto. Para traduzir, o prompt tinha pares no formato "frase em inglês = frase em francês". Os resultados ainda eram fracos em várias tarefas, mas cresciam de forma consistente com o tamanho do modelo.</p>`;
+  else if (S.useTab === 'gpt3') {
+    const ex = [['gato', 'cat'], ['casa', 'house'], ['livro', 'book'], ['cachorro', 'dog']].slice(0, S.shots);
+    pane = `<p><b>GPT-3 (2020): aprendizado no contexto (<i>in-context learning</i>).</b> Coloca-se no prompt uma descrição da tarefa e alguns exemplos; o modelo continua o padrão. <b>Nenhum peso é atualizado</b>: o "aprendizado" acontece só dentro da janela de contexto.</p>
+<div class="ctrl-row"><span class="ctrl-lbl">Exemplos no prompt</span>${seg('shots', S.shots, [[0, 'zero-shot'], [1, 'one-shot'], [3, 'few-shot (3)']])}</div>
+<div class="prompt">Traduza de português para inglês:
+${ex.map(([a, b]) => `${a} => ${b}`).join('\n')}${ex.length ? '\n' : ''}queijo =><span class="ans"> cheese</span></div>
+<p class="small" style="margin-top:8px">No paper, o desempenho melhora de zero para one para few-shot, e esse ganho é <b>muito maior nos modelos grandes</b>: a capacidade de aprender com exemplos no prompt "emerge" com a escala.</p>`;
+  } else pane = `<p><b>Depois do GPT-3: seguir instruções.</b> Um modelo que só prevê o próximo token continua textos; ele não necessariamente <i>obedece</i>. O InstructGPT (2022), base do ChatGPT, acrescentou duas etapas depois do pré-treino:</p>
+<ol><li><b>Ajuste fino supervisionado (SFT)</b>: pessoas escrevem respostas exemplares para instruções, e o modelo é ajustado nelas.</li><li><b>RLHF</b> (aprendizado por reforço com feedback humano): pessoas comparam respostas; um modelo de recompensa aprende essas preferências; o GPT é otimizado para maximizar a recompensa.</li></ol>
+<p class="small muted">A arquitetura continua sendo a que você viu: blocos de decoder com atenção causal. O que muda são os dados e os objetivos de treino. Um InstructGPT de 1,3 bi de parâmetros foi preferido por avaliadores ao GPT-3 de 175 bi.</p>`;
+  return `
+<p class="lead">O mesmo tipo de modelo foi usado de formas bem diferentes a cada geração — e essa mudança é tão importante quanto a arquitetura.</p>
+<div class="ctrl-row"><span class="ctrl-lbl">Geração</span>${seg('usetab', S.useTab, [['gpt1', 'GPT-1: ajuste fino'], ['gpt2', 'GPT-2: zero-shot'], ['gpt3', 'GPT-3: few-shot'], ['depois', 'Depois: instruções e RLHF']])}</div>
+${card('', pane)}
+${note('intu', 'A ideia central', `<p>Se toda tarefa pode ser escrita como texto ("traduza…", "resuma…", "responda…"), então um modelo que continua textos muito bem consegue resolver qualquer uma delas. O prompt virou a nova forma de "programar" o modelo.</p>`)}`;
+}
+
+/* ---------- 11 ---------- */
+function stepJourney() {
+  const n = R.n; if (S.trackIdx == null || S.trackIdx >= n) S.trackIdx = n - 1;
+  const idx = S.trackIdx;
+  const st = [['Token embedding (W<sub>te</sub>)', R.te[idx]], ['+ embedding de posição → h₀', R.X0[idx]]];
+  R.blocks.forEach((B, l) => {
+    const foc = B.att.heads.reduce((acc, hd) => acc.map((v, j) => v + hd.A[idx][j] / H), new Array(n).fill(0));
+    const best = foc.map((v, j) => [v, j]).sort((a, b) => b[0] - a[0]).slice(0, 2).map(([v, j]) => `${show(R.tokens[j])} ${(v * 100).toFixed(0)}%`).join(', ');
+    st.push([`Bloco ${l + 1} · LN (o que a atenção lê)`, B.ln1[idx], true], [`Bloco ${l + 1} · contribuição da atenção <span class="small">(olhou: ${esc(best)})</span>`, B.att.out[idx], true], [`Bloco ${l + 1} · fluxo após a atenção`, B.r1[idx]], [`Bloco ${l + 1} · contribuição da MLP`, B.mlp.out[idx], true], [`Bloco ${l + 1} · fluxo após a MLP`, B.out[idx]]);
+  });
+  st.push(['LayerNorm final', R.hf[idx]]);
+  const base = st[0][1], mx = Math.max(...st.flatMap(s => s[1].map(Math.abs)));
+  const pr = R.probs[idx], best = pr.indexOf(Math.max(...pr));
+  return `
+<p class="lead">Juntando tudo: estas são as transformações aplicadas ao vetor de um token, da tabela de embeddings até a previsão do token seguinte.</p>
+${card('Escolha o token', tokChips(R.tokens, { act: 'tidx', sel: idx, ids: false }))}
+${card(`A jornada de "${esc(show(R.tokens[idx]))}"`, `<div class="tbl-wrap"><div class="jr"><span class="h">etapa</span><span class="h">vetor (${D} dimensões)</span><span class="h num">‖v‖</span><span class="h num cos">cos com o embedding</span>
+${st.map(([lab, v, delta]) => `<span class="lab${delta ? ' delta' : ''}">${delta ? '↳ ' : ''}${lab}</span>${strip(v, mx)}<span class="num">${fmt(norm(v), 2)}</span><span class="num cos">${fmt(cos(v, base), 2)}</span>`).join('')}</div></div>
+<p class="small" style="margin-top:10px">Por fim: logits = LN<sub>f</sub>(h)·W<sub>te</sub><sup>⊤</sup> → softmax → token mais provável: <b>${esc(show(VOCAB[best]))}</b> (${pct(pr[best])})${idx < n - 1 ? `; o token correto seria <b>${esc(show(R.tokens[idx + 1]))}</b>` : ''}.</p>
+<p class="small muted" style="margin:0">Linhas em itálico (↳) são leituras ou escritas no fluxo residual; as demais são o próprio fluxo. Repare que, como o token só olha para o passado, a jornada de um token <b>não muda</b> quando acrescentamos palavras depois dele.</p>`)}
+${card('Resumo: formatos em cada etapa', `<div class="tbl-wrap"><table class="tbl"><tr><th>Etapa</th><th>Operação</th><th class="num">Playground</th><th class="num">GPT-2 small</th></tr>
+<tr><td>Tokenização</td><td>BPE em bytes</td><td class="num">n ≤ ${CTX}</td><td class="num">n ≤ 1024</td></tr>
+<tr><td>Embeddings</td><td>W<sub>te</sub>[ids] + W<sub>pe</sub>[pos]</td><td class="num">n × ${D}</td><td class="num">n × 768</td></tr>
+<tr><td>Q, K, V por cabeça</td><td>LN(h)·W</td><td class="num">n × ${DK}</td><td class="num">n × 64</td></tr>
+<tr><td>Pesos de atenção</td><td>softmax(QKᵀ/√d<sub>k</sub> + M)</td><td class="num">n × n</td><td class="num">n × n</td></tr>
+<tr><td>Fluxo residual</td><td>h + Attn(LN(h)), h + MLP(LN(h))</td><td class="num">n × ${D}</td><td class="num">n × 768</td></tr>
+<tr><td>MLP (interna)</td><td>GELU(xW₁ + b₁)</td><td class="num">n × ${DFF}</td><td class="num">n × 3072</td></tr>
+<tr><td>LayerNorm final</td><td>LN<sub>f</sub>(h<sub>N</sub>)</td><td class="num">n × ${D}</td><td class="num">n × 768</td></tr>
+<tr><td>Logits / probabilidades</td><td>·W<sub>te</sub><sup>⊤</sup>, softmax</td><td class="num">n × ${VOCAB.length}</td><td class="num">n × 50.257</td></tr></table></div>`)}`;
+}
+
+/* ---------- 12 ---------- */
+const QUIZ = [
+  ['Qual é o objetivo de pré-treino do GPT?', ['Preencher palavras mascaradas', 'Prever o próximo token', 'Classificar se duas frases são consecutivas', 'Traduzir entre línguas'], 1, 'Modelagem de linguagem: P(xₜ | x₁…xₜ₋₁), em todas as posições.'],
+  ['Por que o GPT não tem encoder nem cross-attention?', ['Porque é menor', 'Porque não existe uma "sequência de origem" separada: prompt e resposta formam uma única sequência', 'Porque usa posições aprendidas', 'Porque o BPE dispensa'], 1, 'Tudo é continuação de texto; não há o que consultar além da própria sequência.'],
+  ['O que muda no bloco do GPT-2 em relação ao Transformer original?', ['A atenção deixa de ser causal', 'A LayerNorm vai para antes de cada subcamada (Pre-LN) e há uma LayerNorm final', 'A MLP é removida', 'Os embeddings de posição viram senoidais'], 1, 'h ← h + Attn(LN(h)); h ← h + MLP(LN(h)); e LN_f no final.'],
+  ['O que acontece com a distribuição ao usar temperatura T = 0,3?', ['Fica mais achatada', 'Fica mais concentrada no token mais provável', 'Não muda', 'Só os tokens raros são sorteados'], 1, 'Dividir os logits por T < 1 aumenta as diferenças entre eles.'],
+  ['Com top-p = 0,9, de quais tokens se sorteia?', ['Dos 90 tokens mais prováveis', 'Do menor conjunto de tokens que soma pelo menos 90% de probabilidade', 'De todos com probabilidade acima de 0,9', 'Só do mais provável'], 1, 'É o "nucleus sampling": o número de candidatos se adapta à incerteza do modelo.'],
+  ['Para que serve o KV cache?', ['Para guardar o vocabulário', 'Para não recalcular K e V dos tokens anteriores a cada novo token gerado', 'Para treinar mais rápido', 'Para aumentar o contexto máximo'], 1, 'Com a máscara causal, K e V de tokens passados não mudam; basta calcular os do token novo.'],
+  ['No few-shot learning do GPT-3, o que acontece com os pesos do modelo?', ['São ajustados com os exemplos', 'Não mudam: os exemplos ficam só no prompt', 'Só a última camada é ajustada', 'São reinicializados'], 1, 'In-context learning: nenhum gradiente, nenhuma atualização.'],
+  ['Num modelo GPT grande, a maior parte dos parâmetros está…', ['nos embeddings de posição', 'nos blocos: cerca de 12·N·d²', 'na LayerNorm final', 'no tokenizador'], 1, 'No GPT-3: 96 × 12 × 12.288² ≈ 174 bilhões dos 175 bilhões.'],
+];
+function stepQuiz() {
+  const answered = Object.keys(S.quiz).length, right = Object.entries(S.quiz).filter(([q, a]) => QUIZ[q][2] === a).length;
+  return `<p class="lead">Oito perguntas rápidas sobre os modelos GPT. Clique na alternativa que achar correta.</p>
+<p><span class="stat">respondidas: <b>${answered}/${QUIZ.length}</b></span><span class="stat">acertos: <b>${right}</b></span>${answered ? `<button class="btn ghost" data-act="quizreset">Recomeçar</button>` : ''}</p>
+${QUIZ.map(([q, opts, ok, ex], qi) => { const a = S.quiz[qi]; return card('', `<div class="quiz-q"><b>${qi + 1}.</b> ${q}<div class="opts">${opts.map((o, oi) => `<button class="opt${a != null && oi === ok ? ' right' : ''}${a === oi && oi !== ok ? ' wrong' : ''}" data-act="quiz" data-v="${qi}:${oi}" ${a != null ? 'disabled' : ''}>${String.fromCharCode(65 + oi)}) ${o}</button>`).join('')}</div>${a != null ? `<div class="fb">${a === ok ? '<b style="color:#2e8b57">Correto!</b>' : '<b style="color:#c0392b">Não exatamente.</b>'} ${ex}</div>` : ''}</div>`); }).join('')}`;
+}
+
+/* =====================================================================
+   Renderização e eventos
+   ===================================================================== */
+const content = $('#content');
+function renderStepper() {
+  let h = '', g = '';
+  STEPS.forEach((s, i) => { if (s.g !== g) { g = s.g; h += `<span class="chip-sep">${g}</span>`; } h += `<button class="chip${i === S.step ? ' on' : ''}${i < S.step ? ' done' : ''}" data-step="${i}"><span class="n">${i + 1}</span>${s.t}</button>`; });
+  $('#stepper').innerHTML = h;
+  const on = $('#stepper .chip.on'); if (on) { const p = $('#stepper'); p.scrollLeft = on.offsetLeft - p.clientWidth / 2 + on.clientWidth / 2; }
+}
+function renderDiagram() { const b = new Set(STEPS[S.step].blocks); document.querySelectorAll('#diagram [data-blk]').forEach(el => el.classList.toggle('act', b.has(el.dataset.blk))); }
+function render() {
+  const st = STEPS[S.step];
+  content.innerHTML = `<div class="step-head"><div class="step-kicker">Passo ${S.step + 1} de ${STEPS.length} · ${st.g}</div><h2>${st.t}</h2><div class="key">${st.k}</div></div>` + st.r();
+  if (window.renderMathInElement) { try { renderMathInElement(content, { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '\\(', right: '\\)', display: false }], throwOnError: false }); } catch (e) { console.warn(e); } }
+  renderStepper(); renderDiagram();
+  $('#prev').disabled = S.step === 0; $('#next').disabled = S.step === STEPS.length - 1;
+  $('#prev').textContent = S.step > 0 ? '← ' + STEPS[S.step - 1].t : '← Anterior';
+  $('#next').textContent = S.step < STEPS.length - 1 ? STEPS[S.step + 1].t + ' →' : 'Próximo →';
+  $('#pager-info').textContent = `${S.step + 1} / ${STEPS.length}`;
+  $('#seed-info').textContent = `semente dos pesos: ${S.seed}`;
+}
+function setStep(i, scroll = true) {
+  S.step = Math.max(0, Math.min(STEPS.length - 1, i));
+  history.replaceState(null, '', '#' + STEPS[S.step].id);
+  render();
+  if (scroll) { const top = $('.layout').getBoundingClientRect().top + window.scrollY - 56; if (window.scrollY > top) window.scrollTo({ top, behavior: 'smooth' }); }
+}
+function recompute(newWeights) { if (newWeights || !W) W = initModel(S.seed); R = run(); S.gen = null; S.genLog = []; render(); }
+const ACT = {
+  goto: v => setStep(+v), layer: v => { S.layer = +v; }, head: v => { S.head = +v; }, selq: v => { S.selQ = +v; },
+  mask: v => { S.maskOn = v === '1'; }, outpos: v => { S.outPos = +v; }, tidx: v => { S.trackIdx = +v; },
+  samp: () => { const sd = sampleDist(ILL.l, S.temp, S.topk, S.topp); const c = new Array(ILL.w.length).fill(0); for (let i = 0; i < 100; i++) c[drawFrom(sd.final)]++; S.sampCounts = c; },
+  genmode: v => { S.genMode = v; },
+  gennext: () => {
+    const seq = S.gen, f = forward(seq), n = seq.length;
+    const sd = sampleDist(f.logits[n - 1], S.genMode === 'greedy' ? 1 : S.temp, S.genMode === 'greedy' ? 0 : S.topk, S.genMode === 'greedy' ? 1 : S.topp);
+    const i = S.genMode === 'greedy' ? sd.final.indexOf(Math.max(...sd.final)) : drawFrom(sd.final);
+    S.genLog.push({ len: n }); seq.push(VOCAB[i]);
+  },
+  genreset: () => { S.gen = null; S.genLog = []; },
+  preset: v => { const p = PRESETS[+v]; S.calcL = p[1]; S.calcD = p[2]; S.calcV = p[3]; S.calcCtx = p[4]; },
+  shots: v => { S.shots = +v; }, usetab: v => { S.useTab = v; },
+  quiz: v => { const [q, a] = v.split(':').map(Number); S.quiz[q] = a; }, quizreset: () => { S.quiz = {}; },
+};
+content.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]'); if (!t || t.disabled) return;
+  const f = ACT[t.dataset.act]; if (!f) return;
+  if (t.dataset.act === 'goto') { f(t.dataset.v); return; }
+  f(t.dataset.v); render();
+});
+content.addEventListener('change', e => { const k = e.target.dataset.chg; if (!k) return; S[k] = e.target.value; render(); });
+content.addEventListener('input', e => {
+  const k = e.target.dataset.in; if (!k) return;
+  const v = +e.target.value, set = (id, t) => { const el = $('#' + id); if (el) el.textContent = t; };
+  if (k === 'nMerges') { S.nMerges = v; set('lbl-nm', v); $('#w-bpe').innerHTML = bpeWidget(); }
+  if (k === 'temp' || k === 'topk' || k === 'topp') { S[k] = v; S.sampCounts = null; set('lbl-temp', fmt(S.temp, 2)); set('lbl-topk', S.topk || 'off'); set('lbl-topp', S.topp >= 1 ? 'off' : fmt(S.topp, 2)); $('#w-samp').innerHTML = sampWidget(); }
+  if (k === 'calcL' || k === 'calcD') { S[k] = v; set('lbl-' + k, v); $('#w-calc').innerHTML = calcWidget(); }
+});
+const tip = $('#tip');
+document.addEventListener('mouseover', e => { const t = e.target.closest('[data-tip]'); if (t) { tip.textContent = t.dataset.tip; tip.style.opacity = 1; } else tip.style.opacity = 0; });
+document.addEventListener('mousemove', e => { if (tip.style.opacity === '1') { const x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8); tip.style.left = x + 'px'; tip.style.top = (e.clientY + 16) + 'px'; } });
+
+document.addEventListener('DOMContentLoaded', () => {
+  $('#diagram').innerHTML = diagramSVG();
+  $('#diagram').addEventListener('click', e => { const b = e.target.closest('[data-blk]'); if (!b) return; const i = STEPS.findIndex(s => s.blocks.includes(b.dataset.blk)); if (i >= 0) setStep(i); });
+  $('#stepper').addEventListener('click', e => { const c = e.target.closest('[data-step]'); if (c) setStep(+c.dataset.step); });
+  $('#prev').onclick = () => setStep(S.step - 1);
+  $('#next').onclick = () => setStep(S.step + 1);
+  document.addEventListener('keydown', e => { const a = document.activeElement; if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return; if (e.key === 'ArrowRight') setStep(S.step + 1); if (e.key === 'ArrowLeft') setStep(S.step - 1); });
+  const ip = $('#in-prompt'); ip.value = S.prompt;
+  let tm = null;
+  ip.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { S.prompt = ip.value; S.selQ = null; S.outPos = null; S.trackIdx = null; recompute(); }, 250); });
+  $('#btn-seed').onclick = () => { S.seed = 1 + Math.floor(Math.random() * 9999); recompute(true); };
+  $('#btn-reset').onclick = () => { S.prompt = DEF_PROMPT; S.seed = 5; ip.value = S.prompt; S.selQ = null; S.outPos = null; S.trackIdx = null; recompute(true); };
+  W = initModel(S.seed); R = run();
+  const h = location.hash.slice(1), i = STEPS.findIndex(s => s.id === h);
+  S.step = i >= 0 ? i : 0;
+  render();
+});
+</script>
+</body>
+</html>
